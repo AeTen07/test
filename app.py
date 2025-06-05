@@ -1,10 +1,12 @@
 import streamlit as st
 import pandas as pd
 import os
+from dotenv import load_dotenv
 import google.generativeai as genai
 
 # 載入 .env 檔案
-api_key = os.getenv("AIzaSyAxIgrhpSps-gZ0IczS-SzSjiNNvznUewQ")
+load_dotenv()
+api_key = os.getenv("GEMINI_API_KEY")
 
 # 設定 Gemini API 金鑰
 genai.configure(api_key=api_key)

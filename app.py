@@ -24,5 +24,5 @@ prompt = st.text_input("輸入你的問題")
 
 if st.button("送出"):
     st.success("AI 回覆：")
-    st.write(response.text)
+    st.write(response)
 

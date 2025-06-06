@@ -23,6 +23,15 @@ st.subheader("2️⃣ 與 Gemini AI 聊聊")
 prompt = st.text_input("輸入你的問題")
 
 if st.button("送出"):
-    st.success("AI 回覆：")
-    st.write(response.text)
-
+    if not api_key:
+        st.error("API 金鑰未設定！")
+    elif prompt.strip() == "":
+        st.warning("請輸入問題再送出。")
+    else:
+        try:
+            with st.spinner("Gemini 思考中..."):
+                response = model.generate_content(prompt)
+                st.success("AI 回覆：")
+                st.write(response.text)
+        except Exception as e:
+            st.error(f"發生錯誤：{e}")

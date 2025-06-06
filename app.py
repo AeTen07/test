@@ -3,10 +3,10 @@ import pandas as pd
 import google.generativeai as genai
 
 # 直接寫在程式碼裡
-api_key = "你的_GEMINI_API_KEY_直接貼在這裡"
+api_key = "AIzaSyCWLb6_xQ57OsIOFFN5MfJtybzNV2vjxsw"
 
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-pro')
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 st.set_page_config(page_title="CSV 上傳 + Gemini AI", layout="wide")
 st.title("📊 資料集上傳 + 🤖 Gemini AI 聊天室")

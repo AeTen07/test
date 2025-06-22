@@ -26,7 +26,7 @@ with st.sidebar:
         st.info("目前尚無對話紀錄。")
 
 # CSV 上傳
-st.subheader("1️⃣ 上傳你的 CSV 檔案")
+st.subheader("上傳你的 CSV 檔案")
 uploaded_file = st.file_uploader("請選擇一個 CSV 檔案", type="csv")
 
 if uploaded_file is not None:
@@ -34,28 +34,36 @@ if uploaded_file is not None:
     st.success("✅ 成功上傳！")
     st.dataframe(df)
 
-# Gemini 聊天
-st.subheader("2️⃣ 與 Gemini AI 聊聊")
-prompt = st.text_input("請輸入問題")
 
-if st.button("送出"):
-    if prompt.strip() == "":
-        st.warning("⚠️ 請輸入問題再送出。")
-    else:
-        try:
-            with st.spinner("Gemini 思考中..."):
+# 💬 聊天介面
+st.subheader("💬 Gemini AI 對話區")
+
+# 顯示對話氣泡
+for msg in st.session_state.chat_history:
+    with st.chat_message("user"):
+        st.markdown(msg["user"])
+    with st.chat_message("ai"):
+        st.markdown(msg["ai"])
+
+# 輸入新問題
+if prompt := st.chat_input("輸入你的問題..."):
+    # 顯示自己的訊息
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # Gemini 回應
+    with st.chat_message("ai"):
+        with st.spinner("思考中..."):
+            try:
                 response = model.generate_content(prompt)
-                answer = response.text
+                ai_text = response.text
+                st.markdown(ai_text)
 
-                # 保存對話到記憶區
+                # 儲存對話紀錄
                 st.session_state.chat_history.append({
                     "user": prompt,
-                    "ai": answer
+                    "ai": ai_text
                 })
 
-                # 顯示回答
-                st.success("AI 回覆：")
-                st.write(answer)
-
-        except Exception as e:
-            st.error(f"發生錯誤：{e}")
+            except Exception as e:
+                st.error(f"發生錯誤：{e}")

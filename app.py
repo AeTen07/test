@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 import plotly.express as px
+from io import StringIO
 
 # 頁面設定
 st.set_page_config(page_title="Gemini 聊天室", layout="wide")
@@ -65,6 +66,22 @@ for msg in st.session_state.chat_history:
         st.markdown(msg["user"])
     with st.chat_message("ai"):
         st.markdown(msg["ai"])
+
+# 新增聊天內容下載按鈕
+if st.session_state.chat_history:
+    # 把聊天記錄轉成純文字
+    chat_text = ""
+    for i, msg in enumerate(st.session_state.chat_history, 1):
+        chat_text += f"User {i}:\n{msg['user']}\n\nAI {i}:\n{msg['ai']}\n\n---\n\n"
+
+    # 轉成 StringIO 方便下載
+    chat_file = StringIO(chat_text)
+    st.download_button(
+        label="💾 下載聊天記錄",
+        data=chat_file,
+        file_name="chat_history.txt",
+        mime="text/plain"
+    )
 
 # 提問表單（可勾選是否記住 API）
 with st.chat_message("user"):

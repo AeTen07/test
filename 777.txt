@@ -2,5 +2,4 @@ streamlit-gemini-app/
 ├── app.py                # 主程式：Streamlit + Gemini API 串接
 ├── requirements.txt      # 依賴套件清單（部署 Streamlit Cloud 用）
 ├── .streamlit/
-│   └── config.toml       # 自訂主題色
-├── README.md             # 專案說明（可選）
+└── config.toml       # 自訂主題色

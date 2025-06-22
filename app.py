@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import google.generativeai as genai
+import plotly.express as px
 
 # 頁面設定
 st.set_page_config(page_title="Gemini 聊天室", layout="wide")
@@ -35,6 +36,53 @@ if "chat_history" not in st.session_state:
 # 📁 CSV 上傳功能
 st.subheader("📂 上傳 CSV 檔案")
 uploaded_file = st.file_uploader("請選擇一個 CSV 檔案", type="csv")
+
+if uploaded_file:
+    try:
+        df = pd.read_csv(uploaded_file)
+        st.success("✅ 成功上傳！以下是資料預覽：")
+
+        # 欄位選擇器
+        selected_columns = st.multiselect("📌 請選擇要使用的欄位", df.columns.tolist(), default=df.columns.tolist())
+
+        if not selected_columns:
+            st.warning("⚠️ 請至少選擇一個欄位")
+            st.stop()
+
+        filtered_df = df[selected_columns]
+
+        # 🔘 使用 radio 切換圖表類型（按鈕不會消失）
+        chart_type = st.radio("📊 請選擇圖表類型", ["資料表", "長條圖", "折線圖", "圓餅圖"], horizontal=True)
+
+        # 📋 顯示資料表
+        if chart_type == "資料表":
+            st.dataframe(filtered_df)
+
+        # 📊 長條圖
+        elif chart_type == "長條圖":
+            st.subheader("📊 長條圖")
+            st.bar_chart(filtered_df)
+
+        # 📈 折線圖
+        elif chart_type == "折線圖":
+            st.subheader("📈 折線圖")
+            st.line_chart(filtered_df)
+
+        # 🥧 圓餅圖
+        elif chart_type == "圓餅圖":
+            st.subheader("🥧 圓餅圖")
+            if len(selected_columns) == 2:
+                cat_col, val_col = selected_columns
+                pie_data = df.groupby(cat_col)[val_col].sum().reset_index()
+                fig_pie = px.pie(pie_data, names=cat_col, values=val_col, title="圓餅圖")
+                st.plotly_chart(fig_pie)
+            else:
+                st.warning("⚠️ 請選擇 1 個類別欄位 + 1 個數值欄位來繪製圓餅圖")
+
+    except Exception as e:
+        st.error(f"CSV 讀取錯誤：{e}")
+
+'''
 if uploaded_file:
     try:
         df = pd.read_csv(uploaded_file)
@@ -92,7 +140,7 @@ if uploaded_file:
 
     except Exception as e:
         st.error(f"CSV 讀取錯誤：{e}")
-
+'''
 
 # 🧠 側邊欄：記憶留存區
 with st.sidebar:

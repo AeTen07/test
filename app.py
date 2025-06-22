@@ -68,19 +68,9 @@ if uploaded_file:
             st.subheader("📈 折線圖")
             st.line_chart(filtered_df)
 
-        # 🥧 圓餅圖
-        elif chart_type == "圓餅圖":
-            st.subheader("🥧 圓餅圖")
-            if len(selected_columns) == 2:
-                cat_col, val_col = selected_columns
-                pie_data = df.groupby(cat_col)[val_col].sum().reset_index()
-                fig_pie = px.pie(pie_data, names=cat_col, values=val_col, title="圓餅圖")
-                st.plotly_chart(fig_pie)
-            else:
-                st.warning("⚠️ 請選擇 1 個類別欄位 + 1 個數值欄位來繪製圓餅圖")
-
     except Exception as e:
         st.error(f"CSV 讀取錯誤：{e}")
+
 
 # 💬 聊天介面
 st.subheader("💬 Gemini AI 對話區")
@@ -102,14 +92,19 @@ if prompt := st.chat_input("輸入你的問題..."):
     with st.chat_message("ai"):
         with st.spinner("Gemini 思考中..."):
             try:
+            # ⛳ 每次都重新建立模型，驗證 API 是否還有效
+                genai.configure(api_key=st.session_state.api_key)
+                model = genai.GenerativeModel('gemini-1.5-flash')
+
                 response = model.generate_content(prompt)
                 ai_text = response.text
                 st.markdown(ai_text)
 
-                # 儲存對話紀錄
+            # 儲存對話紀錄
                 st.session_state.chat_history.append({
                     "user": prompt,
                     "ai": ai_text
-                })
+                    })
+                
             except Exception as e:
                 st.error(f"發生錯誤：{e}")

@@ -2,50 +2,72 @@ import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 
-# 設定 Gemini API 金鑰（建議用 dotenv 隱藏）
-api_key = "AIzaSyCWLb6_xQ57OsIOFFN5MfJtybzNV2vjxsw"
-genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-1.5-flash')
+# 頁面設定
+st.set_page_config(page_title="Gemini 聊天室", layout="wide")
+st.title("🤖 Gemini AI 聊天室 + 📁 CSV 上傳")
 
-# 初始化對話記錄
+# 取得使用者輸入的 API 金鑰
+if "api_key" not in st.session_state:
+    st.session_state.api_key = ""
+
+st.sidebar.header("🔑 輸入 Gemini API 金鑰")
+api_key_input = st.sidebar.text_input("請輸入你的 API 金鑰", type="password")
+if api_key_input:
+    st.session_state.api_key = api_key_input
+
+# 檢查 API 金鑰是否存在
+if not st.session_state.api_key:
+    st.warning("⚠️ 請在左側輸入有效的 Gemini API 金鑰後使用本系統。")
+    st.stop()
+
+# 設定 Gemini
+try:
+    genai.configure(api_key=st.session_state.api_key)
+    model = genai.GenerativeModel('gemini-1.5-flash')
+except Exception as e:
+    st.error(f"API 金鑰設定失敗：{e}")
+    st.stop()
+
+# 初始化聊天紀錄
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-st.set_page_config(page_title="CSV + Gemini AI", layout="wide")
-st.title("📊 資料集上傳 + 🤖 Gemini AI 聊天室")
+# 📁 CSV 上傳功能
+st.subheader("📂 上傳 CSV 檔案")
+uploaded_file = st.file_uploader("請選擇一個 CSV 檔案", type="csv")
+if uploaded_file:
+    try:
+        df = pd.read_csv(uploaded_file)
+        st.success("✅ 成功上傳！以下是資料預覽：")
+        st.dataframe(df)
+    except Exception as e:
+        st.error(f"CSV 讀取錯誤：{e}")
 
-# 側邊欄：記憶留存區
+# 🧠 側邊欄：記憶留存區
 with st.sidebar:
     st.header("🧠 記憶留存區")
     if st.session_state.chat_history:
-        for i, chat in enumerate(st.session_state.chat_history):
-            st.markdown(f"**你：** {chat['user']}")
-            st.markdown(f"**AI：** {chat['ai']}")
+        for msg in st.session_state.chat_history:
+            st.markdown(f"👤 **你：** {msg['user']}")
+            st.markdown(f"🤖 **AI：** {msg['ai']}")
             st.markdown("---")
+        if st.button("🗑️ 清除對話紀錄"):
+            st.session_state.chat_history = []
+            st.experimental_rerun()
     else:
-        st.info("目前尚無對話紀錄。")
-
-# CSV 上傳
-st.subheader("上傳你的 CSV 檔案")
-uploaded_file = st.file_uploader("請選擇一個 CSV 檔案", type="csv")
-
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
-    st.success("✅ 成功上傳！")
-    st.dataframe(df)
-
+        st.info("目前沒有對話紀錄。")
 
 # 💬 聊天介面
 st.subheader("💬 Gemini AI 對話區")
 
-# 顯示對話氣泡
+# 顯示聊天氣泡
 for msg in st.session_state.chat_history:
     with st.chat_message("user"):
         st.markdown(msg["user"])
     with st.chat_message("ai"):
         st.markdown(msg["ai"])
 
-# 輸入新問題
+# 輸入對話
 if prompt := st.chat_input("輸入你的問題..."):
     # 顯示自己的訊息
     with st.chat_message("user"):
@@ -53,7 +75,7 @@ if prompt := st.chat_input("輸入你的問題..."):
 
     # Gemini 回應
     with st.chat_message("ai"):
-        with st.spinner("思考中..."):
+        with st.spinner("Gemini 思考中..."):
             try:
                 response = model.generate_content(prompt)
                 ai_text = response.text
@@ -64,6 +86,5 @@ if prompt := st.chat_input("輸入你的問題..."):
                     "user": prompt,
                     "ai": ai_text
                 })
-
             except Exception as e:
                 st.error(f"發生錯誤：{e}")

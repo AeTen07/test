@@ -2,8 +2,9 @@ import streamlit as st
 import google.generativeai as genai
 
 # 頁面設定
-st.set_page_config(page_title="Gemini 聊天室", layout="wide")
-st.title("🤖 Gemini AI 聊天室")
+with st.container():
+    st.markdown("## 🤖 Gemini AI 聊天室")
+    st.markdown("### 💬 Gemini AI 對話區")
 
 # 初始化狀態
 if "chat_history" not in st.session_state:

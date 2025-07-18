@@ -18,7 +18,17 @@ if "chat" not in st.session_state:
 # ---------------- 🔐 API 金鑰輸入區 ----------------
 with st.sidebar:
     st.markdown("## 🔐 API 設定")
-    st.session_state.remember_api = st.checkbox("記住 API 金鑰", value=st.session_state.remember_api)
+
+    remember_api_checkbox = st.checkbox("記住 API 金鑰", value=st.session_state.remember_api)
+
+    # 檢查是否從勾選變為取消，若是則清空 API 金鑰
+    if not remember_api_checkbox and st.session_state.remember_api:
+        st.session_state.api_key = ""
+
+    # 更新勾選狀態
+    st.session_state.remember_api = remember_api_checkbox
+
+    # 根據勾選狀態與 API 金鑰顯示或輸入
     if st.session_state.remember_api and st.session_state.api_key:
         api_key_input = st.session_state.api_key
     else:

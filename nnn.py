@@ -4,7 +4,7 @@ import google.generativeai as genai
 # 頁面設定
 with st.container():
     st.markdown("## 🤖 Gemini AI 聊天室")
-    st.markdown("### 💬 Gemini AI 對話區")
+
 
 # 初始化狀態
 if "chat_history" not in st.session_state:

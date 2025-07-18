@@ -18,7 +18,7 @@ if "chat" not in st.session_state:
 # ---------------- 🔐 API 金鑰輸入區 ----------------
 with st.sidebar:
     st.markdown("## 🔐 API 設定")
-
+    st.markdown("## 限gemini-1.5-flash")
     remember_api_checkbox = st.checkbox("記住 API 金鑰", value=st.session_state.remember_api)
 
     # 檢查是否從勾選變為取消，若是則清空 API 金鑰

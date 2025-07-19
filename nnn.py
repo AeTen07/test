@@ -33,19 +33,6 @@ with st.sidebar:
     else:
         api_key_input = st.text_input("請輸入 Gemini API 金鑰", type="password")
 
-    # 📂 檔案上傳區
-    st.markdown("---")
-    st.markdown("## 📂 上傳檔案供 Gemini 分析")
-    uploaded_file = st.file_uploader("請上傳 `.txt`, `.csv`, 或 `.md` 檔", type=["txt", "csv", "md"])
-
-    if uploaded_file:
-        if uploaded_file.name.endswith(".csv"):
-            df = pd.read_csv(uploaded_file)
-            st.session_state.uploaded_context = df.to_csv(index=False)
-        else:
-            st.session_state.uploaded_context = uploaded_file.read().decode("utf-8")
-        st.success("✅ 檔案已上傳並讀取完成！")
-
 # ---------------- 💬 對話歷史區 ----------------
 for msg in st.session_state.chat_history:
     with st.chat_message("user"):

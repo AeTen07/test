@@ -49,6 +49,33 @@ for msg in st.session_state.chat_history:
 if st.session_state.chat_history:
     all_history = "\n\n".join([f"👤 {m['user']}\n🤖 {m['ai']}" for m in st.session_state.chat_history])
     st.download_button("💾 下載聊天紀錄", all_history, file_name="gemini_chat.txt")
+# ---------------- 📎 檔案上傳區 ----------------
+st.subheader("📎 上傳檔案（PDF / TXT / CSV）")
+uploaded_file = st.file_uploader("選擇一個檔案", type=["txt", "pdf", "csv"])
+
+uploaded_text = ""
+if uploaded_file:
+    try:
+        file_type = uploaded_file.name.split(".")[-1].lower()
+        if file_type == "txt":
+            uploaded_text = uploaded_file.read().decode("utf-8")
+        elif file_type == "csv":
+            import pandas as pd
+            df = pd.read_csv(uploaded_file)
+            uploaded_text = df.to_string()
+        elif file_type == "pdf":
+            import fitz  # PyMuPDF
+            with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
+                uploaded_text = "\n".join([page.get_text() for page in doc])
+        else:
+            st.warning("❗ 不支援的檔案格式")
+    except Exception as e:
+        st.error(f"❌ 檔案讀取失敗：{e}")
+
+    st.success("✅ 檔案已上傳並讀取完成")
+    with st.expander("📄 檔案內容預覽"):
+        st.text(uploaded_text[:3000])  # 預覽前 3000 字元
+
 
 # ---------------- 💬 使用 chat 模式持續對話 ----------------
 # 下方輸入框（固定）

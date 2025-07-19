@@ -18,62 +18,60 @@ if "remember_api" not in st.session_state:
     st.session_state.remember_api = False
 if "chat" not in st.session_state:
     st.session_state.chat = None
-if "uploaded_context" not in st.session_state:
-    st.session_state.uploaded_context = ""
 if "uploaded_file_content" not in st.session_state:
     st.session_state.uploaded_file_content = ""
 if "uploaded_image" not in st.session_state:
     st.session_state.uploaded_image = None
 
-# ---------------- 🔐 API 金鑰與設定 ----------------
+# ---------------- 🔐 API 金鑰與檔案上傳（側邊欄） ----------------
 with st.sidebar:
     st.markdown("## 🔐 API 設定")
-    st.session_state.remember_api = st.checkbox("記住 API 金鑰", value=st.session_state.remember_api)
-    if not st.session_state.remember_api:
+    remember_api_checkbox = st.checkbox("記住 API 金鑰", value=st.session_state.remember_api)
+    if not remember_api_checkbox and st.session_state.remember_api:
         st.session_state.api_key = ""
+    st.session_state.remember_api = remember_api_checkbox
 
     if st.session_state.remember_api and st.session_state.api_key:
         api_key_input = st.session_state.api_key
     else:
         api_key_input = st.text_input("請輸入 Gemini API 金鑰", type="password")
 
-# ---------------- 📜 對話紀錄顯示區 ----------------
-chat_display = st.container()
-with chat_display:
-    for msg in st.session_state.chat_history:
-        with st.chat_message("user"):
-            st.markdown(msg["user"])
-        with st.chat_message("ai"):
-            st.markdown(msg["ai"])
+# ---------------- 💬 歷史對話區 ----------------
+for msg in st.session_state.chat_history:
+    with st.chat_message("user"):
+        st.markdown(msg["user"])
+        if msg.get("image"):
+            st.image(msg["image"], caption="你上傳的圖片", use_column_width=True)
+    with st.chat_message("ai"):
+        st.markdown(msg["ai"])
 
-    if st.session_state.chat_history:
-        all_history = "\n\n".join([f"👤 {m['user']}\n🤖 {m['ai']}" for m in st.session_state.chat_history])
-        st.download_button("💾 下載聊天紀錄", all_history, file_name="gemini_chat.txt")
+# ---------------- 💾 聊天紀錄下載 ----------------
+if st.session_state.chat_history:
+    all_history = "\n\n".join([f"👤 {m['user']}\n🤖 {m['ai']}" for m in st.session_state.chat_history])
+    st.download_button("💾 下載聊天紀錄", all_history, file_name="gemini_chat.txt")
 
-# ---------------- 📥 最下方輸入與上傳區 ----------------
-bottom_input = st.empty()
-with bottom_input.container():
+# ---------------- 🧠 Gemini 聊天與圖片上傳功能 ----------------
+# 最底層輸入欄位固定區塊
+with st.container():
     col1, col2 = st.columns([3, 1])
     with col1:
         prompt = st.chat_input("請輸入你的問題...")
-
     with col2:
-        uploaded_file = st.file_uploader("📎 上傳輔助文字檔案", type=["txt", "csv", "md", "json"], label_visibility="collapsed", key="text_file")
-        image_file = st.file_uploader("🖼️ 上傳圖片", type=["jpg", "jpeg", "png"], label_visibility="collapsed", key="image_file")
+        uploaded_file = st.file_uploader("📎 上傳文字檔", type=["txt", "csv", "md", "json"], label_visibility="collapsed", key="file")
+        uploaded_image = st.file_uploader("🖼️ 上傳圖片", type=["png", "jpg", "jpeg", "webp"], label_visibility="collapsed", key="image")
 
-    # 儲存文字檔內容
-    if uploaded_file:
-        file_content = uploaded_file.read().decode("utf-8")
-        st.session_state.uploaded_file_content = file_content
-        st.info("✅ 文字檔已上傳，可用來輔助回答問題。")
+# ---------------- 📎 檔案處理 ----------------
+if uploaded_file:
+    file_content = uploaded_file.read().decode("utf-8")
+    st.session_state.uploaded_file_content = file_content
+    st.info("✅ 文字檔案已上傳，可用來輔助回答問題。")
 
-    # 儲存圖片
-    if image_file:
-        image = Image.open(image_file)
-        st.session_state.uploaded_image = image
-        st.image(image, caption="已上傳的圖片", use_column_width=True)
+if uploaded_image:
+    image_data = uploaded_image.read()
+    st.session_state.uploaded_image = image_data
+    st.info("✅ 圖片已上傳，可輔助分析。")
 
-# ---------------- 🤖 Gemini 回應邏輯 ----------------
+# ---------------- 🚀 Gemini 回應 ----------------
 if prompt:
     if not api_key_input:
         st.error("❌ 請輸入有效的 API 金鑰")
@@ -82,46 +80,42 @@ if prompt:
     try:
         genai.configure(api_key=api_key_input)
 
-        # 建立聊天模型（text-only）
-        text_model = genai.GenerativeModel("gemini-1.5-flash")
+        # 根據是否有圖片，使用不同的模型
+        if st.session_state.uploaded_image:
+            model = genai.GenerativeModel("gemini-1.5-pro-vision")
+            image = Image.open(io.BytesIO(st.session_state.uploaded_image))
+            response = model.generate_content([prompt, image])
+            ai_text = response.text
+        else:
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            if not st.session_state.chat:
+                st.session_state.chat = model.start_chat(history=[])
+            full_prompt = prompt
+            if st.session_state.uploaded_file_content:
+                full_prompt += "\n\n（附檔內容如下，請一併考慮）\n" + st.session_state.uploaded_file_content
+            response = st.session_state.chat.send_message(full_prompt)
+            ai_text = response.text
 
-        # 圖像模型
-        vision_model = genai.GenerativeModel("gemini-pro-vision")
-
-        # 初始化 chat
-        if not st.session_state.chat:
-            st.session_state.chat = text_model.start_chat(history=[])
-
-        # 顯示提問
+        # 顯示提問與圖片
         with st.chat_message("user"):
             st.markdown(prompt)
+            if st.session_state.uploaded_image:
+                st.image(image, caption="你上傳的圖片", use_column_width=True)
 
-        # 組合 prompt（加入文字檔）
-        full_prompt = prompt
-        if st.session_state.uploaded_file_content:
-            full_prompt += "\n\n以下是輔助資料：\n" + st.session_state.uploaded_file_content
-
-        # 回覆生成
+        # 顯示 AI 回覆
         with st.chat_message("ai"):
-            with st.spinner("🤖 Gemini 思考中..."):
+            st.markdown(ai_text)
 
-                # 如果有圖片，呼叫 vision model
-                if st.session_state.uploaded_image:
-                    image_bytes = io.BytesIO()
-                    st.session_state.uploaded_image.save(image_bytes, format='PNG')
-                    image_bytes.seek(0)
-                    response = vision_model.generate_content([full_prompt, image_bytes.getvalue()])
-                else:
-                    response = st.session_state.chat.send_message(full_prompt)
+        # 儲存對話紀錄
+        st.session_state.chat_history.append({
+            "user": prompt,
+            "ai": ai_text,
+            "image": st.session_state.uploaded_image if st.session_state.uploaded_image else None
+        })
 
-                ai_text = response.text
-                st.markdown(ai_text)
-
-                # 儲存對話
-                st.session_state.chat_history.append({
-                    "user": prompt,
-                    "ai": ai_text
-                })
+        # 清空圖片與文字檔狀態（下次輸入不重複）
+        st.session_state.uploaded_file_content = ""
+        st.session_state.uploaded_image = None
 
         # 記住金鑰
         if st.session_state.remember_api:
@@ -130,4 +124,4 @@ if prompt:
             st.session_state.api_key = ""
 
     except Exception as e:
-        st.error(f"❌ 發生錯誤：{e}")
+        st.error(f"❌ 錯誤：{e}")

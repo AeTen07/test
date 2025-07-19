@@ -58,7 +58,16 @@ if st.session_state.chat_history:
     st.download_button("💾 下載聊天紀錄", all_history, file_name="gemini_chat.txt")
 
 # ---------------- 💬 Gemini 聊天模式 ----------------
-prompt = st.chat_input("請輸入你的問題...")
+col1, col2 = st.columns([3, 1])
+with col1:
+    prompt = st.chat_input("請輸入你的問題...")
+with col2:
+    uploaded_file = st.file_uploader("📎 上傳輔助檔案", type=["txt", "csv", "md", "json"], label_visibility="collapsed", key="file")
+
+if uploaded_file:
+    file_content = uploaded_file.read().decode("utf-8")
+    st.session_state.uploaded_file_content = file_content
+    st.info("✅ 檔案已上傳，可用來輔助回答問題。")
 
 if prompt:
     if not api_key_input:
@@ -76,12 +85,12 @@ if prompt:
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # 補上檔案 context
+        # 準備傳送的訊息（含上傳內容）
         full_prompt = prompt
-        if st.session_state.uploaded_context:
-            full_prompt = f"根據以下檔案內容回答：\n\n{st.session_state.uploaded_context}\n\n問題：{prompt}"
+        if "uploaded_file_content" in st.session_state:
+            full_prompt += "\n\n（附檔內容如下，請一併考慮）\n" + st.session_state.uploaded_file_content
 
-        # 回覆
+        # Gemini 回應
         with st.chat_message("ai"):
             with st.spinner("🤖 Gemini 思考中..."):
                 response = st.session_state.chat.send_message(full_prompt)
@@ -94,6 +103,7 @@ if prompt:
                     "ai": ai_text
                 })
 
+        # 記住金鑰
         if st.session_state.remember_api:
             st.session_state.api_key = api_key_input
         else:

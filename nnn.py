@@ -69,7 +69,7 @@ if uploaded_file:
 if uploaded_image:
     image_data = uploaded_image.read()
     st.session_state.uploaded_image = image_data
-    st.info("✅ 圖片已上傳，可輔助分析。")
+    st.info("✅ 圖片已上傳（目前不送入模型，只供參考顯示）。")
 
 # ---------------- 🚀 Gemini 回應 ----------------
 if prompt:
@@ -79,28 +79,26 @@ if prompt:
 
     try:
         genai.configure(api_key=api_key_input)
+        model = genai.GenerativeModel("gemini-1.5-flash")
 
-        # 根據是否有圖片，使用不同的模型
+        if not st.session_state.chat:
+            st.session_state.chat = model.start_chat(history=[])
+
+        # 合成完整提示
+        full_prompt = prompt
+        if st.session_state.uploaded_file_content:
+            full_prompt += "\n\n（附檔內容如下，請一併考慮）\n" + st.session_state.uploaded_file_content
         if st.session_state.uploaded_image:
-            model = genai.GenerativeModel("gemini-1.5-pro-vision")
-            image = Image.open(io.BytesIO(st.session_state.uploaded_image))
-            response = model.generate_content([prompt, image])
-            ai_text = response.text
-        else:
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            if not st.session_state.chat:
-                st.session_state.chat = model.start_chat(history=[])
-            full_prompt = prompt
-            if st.session_state.uploaded_file_content:
-                full_prompt += "\n\n（附檔內容如下，請一併考慮）\n" + st.session_state.uploaded_file_content
-            response = st.session_state.chat.send_message(full_prompt)
-            ai_text = response.text
+            full_prompt += "\n\n（使用者同時上傳了一張圖片，僅供參考，尚未支援圖片分析）"
+
+        response = st.session_state.chat.send_message(full_prompt)
+        ai_text = response.text
 
         # 顯示提問與圖片
         with st.chat_message("user"):
             st.markdown(prompt)
             if st.session_state.uploaded_image:
-                st.image(image, caption="你上傳的圖片", use_column_width=True)
+                st.image(st.session_state.uploaded_image, caption="你上傳的圖片", use_column_width=True)
 
         # 顯示 AI 回覆
         with st.chat_message("ai"):
@@ -110,10 +108,10 @@ if prompt:
         st.session_state.chat_history.append({
             "user": prompt,
             "ai": ai_text,
-            "image": st.session_state.uploaded_image if st.session_state.uploaded_image else None
+            "image": st.session_state.uploaded_image
         })
 
-        # 清空圖片與文字檔狀態（下次輸入不重複）
+        # 清空暫存
         st.session_state.uploaded_file_content = ""
         st.session_state.uploaded_image = None
 

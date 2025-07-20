@@ -1,106 +1,77 @@
 import streamlit as st
+import os
+from dotenv import load_dotenv
 import google.generativeai as genai
+from PIL import Image
 
-# 頁面設定
-st.set_page_config(page_title="Gemini 聊天室", layout="wide")
+# 載入 .env 檔案
+load_dotenv()
+api_key = os.getenv("GEMINI_API_KEY")
 
-# 💡 插入固定標題的 CSS
+# 設定 Gemini API 金鑰
+genai.configure(api_key=api_key)
+model = genai.GenerativeModel('gemini-pro')
+
+# 設定網頁標題與icon
+st.set_page_config(page_title="Gemini 聊天室", page_icon="🤖")
+st.title("🤖 Gemini AI 聊天室")
+st.markdown("## 💬 Gemini AI 對話區")
+
+# 插入自定 CSS：固定輸入欄在底部
 st.markdown("""
-    <style>
-    .fixed-header {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        background-color: #0e1117;
-        padding: 10px 20px;
-        z-index: 100;
-        border-bottom: 1px solid #444;
-    }
-    .content {
-        padding-top: 100px;
-    }
-    </style>
-    <div class="fixed-header">
-        <h1 style="margin-bottom:0">🤖 Gemini AI 聊天室</h1>
-        <h3 style="margin-top:0">💬 Gemini AI 對話區</h3>
-    </div>
+<style>
+div[data-testid="stChatInput"] {
+    position: fixed;
+    bottom: 20px;
+    width: 85%;
+    z-index: 100;
+    background-color: white;
+    padding-bottom: 20px;
+}
+</style>
 """, unsafe_allow_html=True)
 
-# 🧱 初始化狀態
+# 建立聊天歷史紀錄
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-if "api_key" not in st.session_state:
-    st.session_state.api_key = ""
-if "remember_api" not in st.session_state:
-    st.session_state.remember_api = False
-if "chat" not in st.session_state:
-    st.session_state.chat = None  # Gemini 的 chat 物件
 
-# 🧾 API 金鑰輸入區（側邊欄）
-with st.sidebar:
-    st.markdown("## 🔐 API 設定")
-    remember_api_checkbox = st.checkbox("記住 API 金鑰", value=st.session_state.remember_api)
+# 顯示歷史訊息
+for msg in st.session_state.chat_history:
+    with st.chat_message("user"):
+        st.markdown(msg["user"])
+        if msg.get("image"):
+            st.image(msg["image"], caption="你上傳的圖片", use_column_width=True)
+    with st.chat_message("ai"):
+        st.markdown(msg["ai"])
 
-    # 勾選狀態更新 & 金鑰清除
-    if not remember_api_checkbox and st.session_state.remember_api:
-        st.session_state.api_key = ""
-    st.session_state.remember_api = remember_api_checkbox
+# 使用者輸入
+prompt = st.chat_input("請輸入你的問題...")
 
-    # 顯示或輸入金鑰
-    if st.session_state.remember_api and st.session_state.api_key:
-        api_key_input = st.session_state.api_key
-    else:
-        api_key_input = st.text_input("請輸入 Gemini API 金鑰", type="password")
-
-# 💬 對話顯示區（主內容區塊）
+# 檔案上傳放在最底部區塊
 with st.container():
-    st.markdown('<div class="content">', unsafe_allow_html=True)
+    uploaded_image = st.file_uploader("🖼️ 上傳圖片", type=["png", "jpg", "jpeg", "webp"], label_visibility="visible")
 
-    for msg in st.session_state.chat_history:
-        with st.chat_message("user"):
-            st.markdown(msg["user"])
-        with st.chat_message("ai"):
-            st.markdown(msg["ai"])
+# 判斷是否送出訊息或圖片
+if prompt or uploaded_image:
+    # 儲存使用者訊息
+    user_msg = {"user": prompt, "image": None}
+    with st.chat_message("user"):
+        st.markdown(prompt)
+        if uploaded_image:
+            image = Image.open(uploaded_image)
+            st.image(image, caption="你上傳的圖片", use_column_width=True)
+            user_msg["image"] = image
 
-    if st.session_state.chat_history:
-        all_history = "\n\n".join([f"👤 {m['user']}\n🤖 {m['ai']}" for m in st.session_state.chat_history])
-        st.download_button("💾 下載聊天紀錄", all_history, file_name="gemini_chat.txt")
-
-    prompt = st.chat_input("請輸入你的問題...")
-
-    if prompt:
-        if not api_key_input:
-            st.error("❌ 請輸入有效的 API 金鑰")
-            st.stop()
-
-        try:
-            genai.configure(api_key=api_key_input)
-            model = genai.GenerativeModel("gemini-1.5-flash")
-
-            if not st.session_state.chat:
-                st.session_state.chat = model.start_chat(history=[])
-
-            with st.chat_message("user"):
-                st.markdown(prompt)
-
-            with st.chat_message("ai"):
-                with st.spinner("🤖 Gemini 思考中..."):
-                    response = st.session_state.chat.send_message(prompt)
-                    ai_text = response.text
-                    st.markdown(ai_text)
-
-                    st.session_state.chat_history.append({
-                        "user": prompt,
-                        "ai": ai_text
-                    })
-
-            if st.session_state.remember_api:
-                st.session_state.api_key = api_key_input
+    # Gemini 回覆
+    with st.chat_message("ai"):
+        with st.spinner("Gemini 思考中..."):
+            if uploaded_image:
+                img_data = genai.upload_file(uploaded_image.name, uploaded_image.read())
+                response = model.generate_content([prompt, img_data])
             else:
-                st.session_state.api_key = ""
+                response = model.generate_content(prompt)
+        st.markdown(response.text)
 
-        except Exception as e:
-            st.error(f"❌ 錯誤：{e}")
-
-    st.markdown('</div>', unsafe_allow_html=True)  # 關閉 content 區塊
+    # 儲存對話紀錄
+    ai_msg = {"user": prompt, "image": user_msg["image"], "ai": response.text}
+    st.session_state.chat_history.append(ai_msg)

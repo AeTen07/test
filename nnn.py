@@ -91,8 +91,9 @@ if prompt:
         if st.session_state.uploaded_image:
             full_prompt += "\n\n（使用者同時上傳了一張圖片，僅供參考，尚未支援圖片分析）"
 
-        response = st.session_state.chat.send_message(full_prompt)
-        ai_text = response.text
+        with st.spinner("🤔 Gemini 思考中..."):
+            response = st.session_state.chat.send_message(full_prompt)
+            ai_text = response.text
 
         # 顯示提問與圖片
         with st.chat_message("user"):

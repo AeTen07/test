@@ -36,15 +36,6 @@ with st.sidebar:
     else:
         api_key_input = st.text_input("請輸入 Gemini API 金鑰", type="password")
 
-# ---------------- 💬 歷史對話區 ----------------
-for msg in st.session_state.chat_history:
-    with st.chat_message("user"):
-        st.markdown(msg["user"])
-        if msg.get("image"):
-            st.image(msg["image"], caption="你上傳的圖片", use_column_width=True)
-    with st.chat_message("ai"):
-        st.markdown(msg["ai"])
-
 # ---------------- 💾 聊天紀錄下載 ----------------
 if st.session_state.chat_history:
     all_history = "\n\n".join([f"👤 {m['user']}\n🤖 {m['ai']}" for m in st.session_state.chat_history])
@@ -60,6 +51,14 @@ with st.container():
         uploaded_file = st.file_uploader("📎 上傳文字檔", type=["txt", "csv", "md", "json"], label_visibility="collapsed", key="file")
         uploaded_image = st.file_uploader("🖼️ 上傳圖片", type=["png", "jpg", "jpeg", "webp"], label_visibility="collapsed", key="image")
 
+# ---------------- 💬 歷史對話區 ----------------
+for msg in st.session_state.chat_history:
+    with st.chat_message("user"):
+        st.markdown(msg["user"])
+        if msg.get("image"):
+            st.image(msg["image"], caption="你上傳的圖片", use_column_width=True)
+    with st.chat_message("ai"):
+        st.markdown(msg["ai"])
 # ---------------- 📎 檔案處理 ----------------
 if uploaded_file:
     file_content = uploaded_file.read().decode("utf-8")

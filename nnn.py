@@ -122,4 +122,8 @@ if prompt:
             st.session_state.api_key = ""
 
     except Exception as e:
-        st.error(f"❌ 錯誤：{e}")
+        if "API key" in str(e) or "permission" in str(e).lower() or "403" in str(e):
+            st.error("❌ API 金鑰無效或權限不足，請確認後重新輸入。")
+        else:
+            st.error("❌ 發生未知錯誤，請稍後再試。")
+            st.exception(e)  # 若你想除錯時看到詳細錯誤，可保留這行；要隱藏就移除

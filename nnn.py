@@ -18,6 +18,8 @@ if "chat" not in st.session_state:
     st.session_state.chat = None
 if "uploaded_file_content" not in st.session_state:
     st.session_state.uploaded_file_content = ""
+if "use_uploaded_file" not in st.session_state:
+    st.session_state.use_uploaded_file = False
 
 # ---------------- 🔐 API 金鑰與檔案上傳（側邊欄） ----------------
 with st.sidebar:
@@ -38,7 +40,6 @@ if st.session_state.chat_history:
     st.download_button("💾 下載聊天紀錄", all_history, file_name="gemini_chat.txt")
 
 # ---------------- 🧠 Gemini 聊天與檔案上傳功能 ----------------
-# 最底層輸入欄位固定區塊
 with st.container():
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -46,18 +47,19 @@ with st.container():
     with col2:
         uploaded_file = st.file_uploader("📎 上傳文字檔", type=["txt", "csv", "md", "json"], label_visibility="collapsed", key="file")
 
+# ---------------- 📎 檔案處理 ----------------
+if uploaded_file:
+    file_content = uploaded_file.read().decode("utf-8")
+    st.session_state.uploaded_file_content = file_content
+    st.info("✅ 文字檔案已上傳。")
+    st.session_state.use_uploaded_file = st.checkbox("✅ 使用上傳檔案輔助回答", value=True)
+
 # ---------------- 💬 歷史對話區 ----------------
 for msg in st.session_state.chat_history:
     with st.chat_message("user"):
         st.markdown(msg["user"])
     with st.chat_message("ai"):
         st.markdown(msg["ai"])
-
-# ---------------- 📎 檔案處理 ----------------
-if uploaded_file:
-    file_content = uploaded_file.read().decode("utf-8")
-    st.session_state.uploaded_file_content = file_content
-    st.info("✅ 文字檔案已上傳，可用來輔助回答問題。")
 
 # ---------------- 🚀 Gemini 回應 ----------------
 if prompt:
@@ -74,7 +76,7 @@ if prompt:
 
         # 合成完整提示
         full_prompt = prompt
-        if st.session_state.uploaded_file_content:
+        if st.session_state.use_uploaded_file and st.session_state.uploaded_file_content:
             full_prompt += "\n\n（附檔內容如下，請一併考慮）\n" + st.session_state.uploaded_file_content
 
         with st.spinner("🤔 Gemini 思考中..."):
@@ -96,6 +98,7 @@ if prompt:
 
         # 清空暫存
         st.session_state.uploaded_file_content = ""
+        st.session_state.use_uploaded_file = False
 
         # 記住金鑰
         if st.session_state.remember_api:

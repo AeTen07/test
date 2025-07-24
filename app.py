@@ -56,6 +56,13 @@ with st.sidebar:
         all_history = "\n\n".join([f"👤 {m['user']}\n🤖 {m['ai']}" for m in st.session_state.chat_history])
         st.download_button("💾 下載聊天紀錄", all_history, file_name="gemini_chat.txt", use_container_width=True)
 
+    st.markdown("---")
+    st.markdown("## 🗑️ 清除聊天")
+    if st.button("清除所有聊天記錄", use_container_width=True):
+        st.session_state.chat_history = []
+        st.session_state.chat = None
+        st.success("✅ 已清除聊天紀錄")
+
 # ---------------- 💬 歷史對話區 ----------------
 for msg in st.session_state.chat_history:
     with st.chat_message("user"):

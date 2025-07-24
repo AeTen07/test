@@ -34,6 +34,20 @@ with st.sidebar:
     else:
         api_key_input = st.text_input("請輸入 Gemini API 金鑰", type="password")
 
+# ---------------- 📍 錨點：頁首 ----------------
+st.markdown("<a name='top'></a>", unsafe_allow_html=True)
+
+# 🔝 回到最上方按鈕
+if st.button("🔝 回到最上方", use_container_width=True):
+    st.markdown("<meta http-equiv='refresh' content='0; URL=#top'>", unsafe_allow_html=True)
+
+# ---------------- 📍 錨點：頁底 ----------------
+st.markdown("<a name='bottom'></a>", unsafe_allow_html=True)
+
+# 🔽 回到底部按鈕
+if st.button("🔽 回到底部", use_container_width=True):
+    st.markdown("<meta http-equiv='refresh' content='0; URL=#bottom'>", unsafe_allow_html=True)
+
 # ---------------- 💾 聊天紀錄下載 ----------------
 if st.session_state.chat_history:
     all_history = "\n\n".join([f"👤 {m['user']}\n🤖 {m['ai']}" for m in st.session_state.chat_history])
@@ -60,7 +74,6 @@ for msg in reversed(st.session_state.chat_history):
         st.markdown(msg["user"])
     with st.chat_message("ai"):
         st.markdown(msg["ai"])
-
 
 # ---------------- 🚀 Gemini 回應 ----------------
 if prompt:

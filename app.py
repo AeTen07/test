@@ -23,7 +23,7 @@ if "use_uploaded_file" not in st.session_state:
 if "enable_memory" not in st.session_state:
     st.session_state.enable_memory = True  # ✅ 預設啟用可持續對話
 
-# ---------------- 🔐 側邊欄：API 金鑰、上傳檔案、是否啟用記憶 ----------------
+# ---------------- 🔐 側邊欄：API 金鑰、上傳檔案、是否啟用記憶、聊天紀錄下載----------------
 with st.sidebar:
     st.markdown("## 🔐 API 設定")
     remember_api_checkbox = st.checkbox("記住 API 金鑰", value=st.session_state.remember_api)
@@ -50,11 +50,11 @@ with st.sidebar:
         st.session_state.use_uploaded_file = st.checkbox("✅ 使用上傳檔案輔助回答", value=True)
     else:
         st.session_state.use_uploaded_file = False
-
-# ---------------- 💾 聊天紀錄下載 ----------------
-if st.session_state.chat_history:
-    all_history = "\n\n".join([f"👤 {m['user']}\n🤖 {m['ai']}" for m in st.session_state.chat_history])
-    st.download_button("💾 下載聊天紀錄", all_history, file_name="gemini_chat.txt")
+    st.markdown("---")# 💾 聊天紀錄下載 
+    st.markdown("## 💾 聊天紀錄")
+    if st.session_state.chat_history:
+        all_history = "\n\n".join([f"👤 {m['user']}\n🤖 {m['ai']}" for m in st.session_state.chat_history])
+        st.download_button("💾 下載聊天紀錄", all_history, file_name="gemini_chat.txt", use_container_width=True)
 
 # ---------------- 💬 歷史對話區 ----------------
 for msg in st.session_state.chat_history:

@@ -33,26 +33,22 @@ with st.sidebar:
         api_key_input = st.session_state.api_key
     else:
         api_key_input = st.text_input("請輸入 Gemini API 金鑰", type="password")
-    
+
+    st.markdown("---")
+    st.markdown("## 📎 檔案輔助")
+    uploaded_file = st.file_uploader("上傳文字檔", type=["txt", "csv", "md", "json"])
+    if uploaded_file:
+        file_content = uploaded_file.read().decode("utf-8")
+        st.session_state.uploaded_file_content = file_content
+        st.info("✅ 文字檔案已上傳。")
+        st.session_state.use_uploaded_file = st.checkbox("✅ 使用上傳檔案輔助回答", value=True)
+    else:
+        st.session_state.use_uploaded_file = False
+
 # ---------------- 💾 聊天紀錄下載 ----------------
 if st.session_state.chat_history:
     all_history = "\n\n".join([f"👤 {m['user']}\n🤖 {m['ai']}" for m in st.session_state.chat_history])
     st.download_button("💾 下載聊天紀錄", all_history, file_name="gemini_chat.txt")
-    
-# ---------------- 🧠 Gemini 聊天與檔案上傳功能 ----------------
-with st.container():
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        prompt = st.chat_input("請輸入你的問題...")
-    with col2:
-        uploaded_file = st.file_uploader("📎 上傳文字檔", type=["txt", "csv", "md", "json"], label_visibility="collapsed", key="file")
-
-# ---------------- 📎 檔案處理 ----------------
-if uploaded_file:
-     file_content = uploaded_file.read().decode("utf-8")
-     st.session_state.uploaded_file_content = file_content
-     st.info("✅ 文字檔案已上傳。")
-     st.session_state.use_uploaded_file = st.checkbox("✅ 使用上傳檔案輔助回答", value=True)
 
 # ---------------- 💬 歷史對話區 ----------------
 for msg in st.session_state.chat_history:
@@ -60,7 +56,10 @@ for msg in st.session_state.chat_history:
         st.markdown(msg["user"])
     with st.chat_message("ai"):
         st.markdown(msg["ai"])
-        
+
+# ---------------- 📥 輸入區 ----------------
+prompt = st.chat_input("請輸入你的問題...")
+
 # ---------------- 🚀 Gemini 回應 ----------------
 if prompt:
     if not api_key_input:
@@ -96,9 +95,8 @@ if prompt:
             "ai": ai_text
         })
 
-        # 清空暫存
+        # 清空暫存（只清除內容，不清除checkbox）
         st.session_state.uploaded_file_content = ""
-        st.session_state.use_uploaded_file = False
 
         # 記住金鑰
         if st.session_state.remember_api:
@@ -111,5 +109,4 @@ if prompt:
             st.error("❌ API 金鑰無效或權限不足，請確認後重新輸入。")
         else:
             st.error("❌ 發生未知錯誤，請稍後再試。")
-            st.exception(e)  # 開發階段建議保留
-
+            st.exception(e)

@@ -26,6 +26,7 @@ if "enable_memory" not in st.session_state:
 # ---------------- 🔐 側邊欄：API 金鑰、上傳檔案、是否啟用記憶、聊天紀錄下載、載入聊天紀錄----------------
 with st.sidebar:
     st.markdown("## 🔐 API 設定")
+    st.markdown("限 gemini-1.5-flash")
     remember_api_checkbox = st.checkbox("記住 API 金鑰", value=st.session_state.remember_api)
     if not remember_api_checkbox and st.session_state.remember_api:
         st.session_state.api_key = ""

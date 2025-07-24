@@ -55,7 +55,7 @@ if uploaded_file:
     st.session_state.use_uploaded_file = st.checkbox("✅ 使用上傳檔案輔助回答", value=True)
 
 # ---------------- 💬 歷史對話區 ----------------
-for msg in reversed(st.session_state.chat_history):
+for msg in st.session_state.chat_history:
     with st.chat_message("user"):
         st.markdown(msg["user"])
     with st.chat_message("ai"):

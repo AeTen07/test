@@ -39,14 +39,6 @@ if st.session_state.chat_history:
     all_history = "\n\n".join([f"👤 {m['user']}\n🤖 {m['ai']}" for m in st.session_state.chat_history])
     st.download_button("💾 下載聊天紀錄", all_history, file_name="gemini_chat.txt")
 
-# ---------------- 🧠 Gemini 聊天與檔案上傳功能 ----------------
-with st.container():
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        prompt = st.chat_input("請輸入你的問題...")
-    with col2:
-        uploaded_file = st.file_uploader("📎 上傳文字檔", type=["txt", "csv", "md", "json"], label_visibility="collapsed", key="file")
-
 # ---------------- 📎 檔案處理 ----------------
 if uploaded_file:
     file_content = uploaded_file.read().decode("utf-8")
@@ -112,3 +104,10 @@ if prompt:
         else:
             st.error("❌ 發生未知錯誤，請稍後再試。")
             st.exception(e)  # 開發階段建議保留
+# ---------------- 🧠 Gemini 聊天與檔案上傳功能 ----------------
+with st.container():
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        prompt = st.chat_input("請輸入你的問題...")
+    with col2:
+        uploaded_file = st.file_uploader("📎 上傳文字檔", type=["txt", "csv", "md", "json"], label_visibility="collapsed", key="file")

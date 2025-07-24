@@ -33,6 +33,12 @@ with st.sidebar:
         api_key_input = st.session_state.api_key
     else:
         api_key_input = st.text_input("請輸入 Gemini API 金鑰", type="password")
+    # ---------------- 📎 檔案處理 ----------------
+    if uploaded_file:
+        file_content = uploaded_file.read().decode("utf-8")
+        st.session_state.uploaded_file_content = file_content
+        st.info("✅ 文字檔案已上傳。")
+        st.session_state.use_uploaded_file = st.checkbox("✅ 使用上傳檔案輔助回答", value=True)
 
 # ---------------- 💾 聊天紀錄下載 ----------------
 if st.session_state.chat_history:
@@ -46,12 +52,6 @@ with st.container():
         prompt = st.chat_input("請輸入你的問題...")
     with col2:
         uploaded_file = st.file_uploader("📎 上傳文字檔", type=["txt", "csv", "md", "json"], label_visibility="collapsed", key="file")
-# ---------------- 📎 檔案處理 ----------------
-if uploaded_file:
-    file_content = uploaded_file.read().decode("utf-8")
-    st.session_state.uploaded_file_content = file_content
-    st.info("✅ 文字檔案已上傳。")
-    st.session_state.use_uploaded_file = st.checkbox("✅ 使用上傳檔案輔助回答", value=True)
 
 # ---------------- 💬 歷史對話區 ----------------
 for msg in st.session_state.chat_history:

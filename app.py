@@ -52,7 +52,7 @@ with st.sidebar:
     else:
         st.session_state.use_uploaded_file = False
     st.markdown("---")# 💾 聊天紀錄下載 
-    st.markdown("## 💾 聊天紀錄")
+    st.markdown("## 💾 聊天紀錄下載")
     if st.session_state.chat_history:
         all_history = "\n\n".join([f"👤 {m['user']}\n🤖 {m['ai']}" for m in st.session_state.chat_history])
         st.download_button("💾 下載聊天紀錄", all_history, file_name="gemini_chat.txt", use_container_width=True)

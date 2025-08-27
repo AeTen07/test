@@ -10,9 +10,9 @@ import google.generativeai as genai
 # ===============================
 # 載入環境變數
 # ===============================
-load_dotenv()
-OPENCAGE_KEY = os.getenv("OPENCAGE_API_KEY")
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+
+OPENCAGE_KEY = st.secrets("OPENCAGE_API_KEY")
+GEMINI_KEY = st.secrets("GEMINI_API_KEY")
 
 if not OPENCAGE_KEY:
     st.error("❌ 請先設定環境變數 OPENCAGE_API_KEY")

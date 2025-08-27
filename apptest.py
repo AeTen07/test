@@ -27,30 +27,12 @@ genai.configure(api_key=GEMINI_KEY)
 # 支援查詢的 OSM Tags
 # ===============================
 OSM_TAGS = {
-     "教育": {
-        "學校": {"amenity": "school"},
-        "大學": {"amenity": "university"},
-        "圖書館": {"amenity": "library"},
-    },
-    "健康與保健": {
-        "醫院": {"amenity": "hospital"},
-        "藥局": {"amenity": "pharmacy"},
-        "診所": {"amenity": "doctors"},
-    },
-    "購物": {
-        "便利商店": {"shop": "convenience"},
-        "超市": {"shop": "supermarket"},
-        "百貨公司": {"shop": "department_store"},
-    },
-    "交通運輸": {
-        "公車站": {"highway": "bus_stop"},
-        "火車站": {"railway": "station"},
-        "捷運/地鐵站": {"railway": "subway_entrance"},
-    },
-    "餐飲": {
-        "餐廳": {"amenity": "restaurant"},
-        "咖啡廳": {"amenity": "cafe"},
-    }
+    "交通": {"public_transport": "stop_position"},
+    "超商": {"shop": "convenience"},
+    "餐廳": {"amenity": "restaurant"},
+    "學校": {"amenity": "school"},
+    "醫院": {"amenity": "hospital"},
+    "藥局": {"amenity": "pharmacy"}
 }
 
 # ===============================

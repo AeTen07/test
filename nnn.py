@@ -1,164 +1,423 @@
 import streamlit as st
-import requests
-import folium
 import os
+import pandas as pd
 import math
-from dotenv import load_dotenv
-from streamlit_folium import st_folium
-import google.generativeai as genai
+#from (檔案名稱) import (函式名稱)
 
-# ===============================
-# 載入環境變數
-# ===============================
-
-OPENCAGE_KEY = st.secrets["OPENCAGE_API_KEY"]
-GEMINI_KEY = st.secrets["GEMINI_API_KEY"]
-
-if not OPENCAGE_KEY:
-    st.error("❌ 請先設定環境變數 OPENCAGE_API_KEY")
-    st.stop()
-
-if not GEMINI_KEY:
-    st.error("❌ 請先設定環境變數 GEMINI_API_KEY")
-    st.stop()
-
-# 設定 Gemini API
-genai.configure(api_key=GEMINI_KEY)
-
-# ===============================
-# OSM Tags (替代 Google Places 類別)
-# ===============================
-PLACE_TYPES = {
-    "教育": {
-        "學校": {"amenity": "school"},
-        "大學": {"amenity": "university"},
-        "圖書館": {"amenity": "library"},
-    },
-    "健康與保健": {
-        "醫院": {"amenity": "hospital"},
-        "藥局": {"amenity": "pharmacy"},
-        "診所": {"amenity": "doctors"},
-    },
-    "購物": {
-        "便利商店": {"shop": "convenience"},
-        "超市": {"shop": "supermarket"},
-        "百貨公司": {"shop": "department_store"},
-    },
-    "交通運輸": {
-        "公車站": {"highway": "bus_stop"},
-        "火車站": {"railway": "station"},
-        "捷運/地鐵站": {"railway": "subway_entrance"},
-    },
-    "餐飲": {
-        "餐廳": {"amenity": "restaurant"},
-        "咖啡廳": {"amenity": "cafe"},
+def get_city_options(data_dir="./Data"):
+    # 讀取 CSV 檔
+    files = [f for f in os.listdir(data_dir) if f.endswith(".csv")]
+    # 中文對照表
+    name_map = {
+        "Taichung-city_buy_properties.csv": "台中市",
     }
-}
+    # 自動 fallback 顯示英文檔名（去掉 -city_buy_properties.csv）
+    options = {name_map.get(f, f.replace("-city_buy_properties.csv", "")): f for f in files}
+    return options
 
-# ===============================
-# 工具函式
-# ===============================
-def geocode_address(address: str):
-    """利用 OpenCage 把地址轉成經緯度"""
-    url = "https://api.opencagedata.com/geocode/v1/json"
-    params = {"q": address, "key": OPENCAGE_KEY, "language": "zh-TW", "limit": 1}
-    try:
-        res = requests.get(url, params=params, timeout=10).json()
-        if res["results"]:
-            return res["results"][0]["geometry"]["lat"], res["results"][0]["geometry"]["lng"]
-        else:
-            return None, None
-    except Exception:
-        return None, None
-
-def query_osm_places(lat, lng, radius, selected_types):
-    """用 Overpass API 查詢指定類型地點"""
-    query_parts = []
-    for sub_type in selected_types:
-        tag_dict = selected_types[sub_type]
-        for k, v in tag_dict.items():
-            query_parts.append(f"""
-              node["{k}"="{v}"](around:{radius},{lat},{lng});
-              way["{k}"="{v}"](around:{radius},{lat},{lng});
-              relation["{k}"="{v}"](around:{radius},{lat},{lng});
-            """)
-    query = f"""
-    [out:json][timeout:25];
-    (
-        {"".join(query_parts)}
-    );
-    out center;
+def filter_properties(df, filters):
     """
-
+    根據篩選條件過濾房產資料
+    """
+    filtered_df = df.copy()
+    
     try:
-        r = requests.post("https://overpass-api.de/api/interpreter", data=query.encode("utf-8"), timeout=20)
-        data = r.json()
-    except:
-        return []
+        # 房產類型篩選
+        if filters['housetype'] != "不限":
+            filtered_df = filtered_df[filtered_df['類型'] == filters['housetype']]
+        
+        # 預算篩選（總價萬元）
+        if filters['budget_min'] > 0:
+            filtered_df = filtered_df[filtered_df['總價(萬)'] >= filters['budget_min']]
+        if filters['budget_max'] < 1000000:
+            filtered_df = filtered_df[filtered_df['總價(萬)'] <= filters['budget_max']]
+        
+        # 屋齡篩選
+        if filters['age_min'] > 0:
+            filtered_df = filtered_df[filtered_df['屋齡'] >= filters['age_min']]
+        if filters['age_max'] < 100:
+            filtered_df = filtered_df[filtered_df['屋齡'] <= filters['age_max']]
+        
+        # 建坪篩選
+        if filters['area_min'] > 0:
+            filtered_df = filtered_df[filtered_df['建坪'] >= filters['area_min']]
+        if filters['area_max'] < 1000:
+            filtered_df = filtered_df[filtered_df['建坪'] <= filters['area_max']]
+        
+        # 車位篩選
+        if filters['car_grip'] == "需要":
+            # 假設有車位的資料在某個欄位中，這裡需要根據實際資料結構調整
+            # 例如：如果有 '車位' 欄位，且值為 "有" 或數量大於0
+            if '車位' in filtered_df.columns:
+                filtered_df = filtered_df[
+                    (filtered_df['車位'].notna()) & 
+                    (filtered_df['車位'] != "無") & 
+                    (filtered_df['車位'] != 0)
+                ]
+        elif filters['car_grip'] == "不要":
+            if '車位' in filtered_df.columns:
+                filtered_df = filtered_df[
+                    (filtered_df['車位'].isna()) | 
+                    (filtered_df['車位'] == "無") | 
+                    (filtered_df['車位'] == 0)
+                ]
+        
+    except Exception as e:
+        st.error(f"篩選過程中發生錯誤: {e}")
+        return df
+    
+    return filtered_df
 
-    results = []
-    for el in data.get("elements", []):
-        tags = el.get("tags", {})
-        name = tags.get("name", "未命名")
-        lat_p = el.get("lat") or el.get("center", {}).get("lat")
-        lon_p = el.get("lon") or el.get("center", {}).get("lon")
-        if lat_p and lon_p:
-            results.append((name, lat_p, lon_p, tags))
-    return results
+def display_pagination(df, items_per_page=10):
+    """
+    處理分頁邏輯並返回當前頁面的資料
+    """
+    # 初始化頁面狀態
+    if 'current_search_page' not in st.session_state:
+        st.session_state.current_search_page = 1
+    
+    total_items = len(df)
+    total_pages = math.ceil(total_items / items_per_page) if total_items > 0 else 1
+    
+    # 確保頁面數在有效範圍內
+    if st.session_state.current_search_page > total_pages:
+        st.session_state.current_search_page = 1
+    
+    # 計算當前頁面的資料範圍
+    start_idx = (st.session_state.current_search_page - 1) * items_per_page
+    end_idx = min(start_idx + items_per_page, total_items)
+    
+    current_page_data = df.iloc[start_idx:end_idx]
+    
+    return current_page_data, st.session_state.current_search_page, total_pages, total_items
 
-def haversine(lat1, lon1, lat2, lon2):
-    """計算兩點距離（公尺）"""
-    R = 6371000
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    d_phi = math.radians(lat2 - lat1)
-    d_lambda = math.radians(lon2 - lon1)
+def main():
+    st.set_page_config(layout="wide")
 
-    a = math.sin(d_phi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(d_lambda/2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    return R * c
+    # 初始化頁面狀態
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = 'home'
 
-# ===============================
-# Streamlit UI
-# ===============================
-st.title("📍 地址周邊查詢 (OSM 版，免 Google API)")
+    # 側邊欄按鈕 - 每個都有唯一的 key
+    if st.sidebar.button("🏠 首頁", use_container_width=True, key="home_button"):
+        st.session_state.current_page = 'home'
+        # 重置搜尋頁面
+        if 'current_search_page' in st.session_state:
+            del st.session_state.current_search_page
 
-address = st.text_input("輸入地址")
-radius = st.slider("搜尋半徑（公尺）", 100, 1000, 600)
+    if st.sidebar.button("🔍 搜尋頁面", use_container_width=True, key="search_button"):
+        st.session_state.current_page = 'search'
 
-main_category = st.selectbox("選擇分類", PLACE_TYPES.keys())
-sub_types = st.multiselect("選擇要查詢的地點類型", list(PLACE_TYPES[main_category].keys()))
+    if st.sidebar.button("📊 分析頁面", use_container_width=True, key="analysis_button"):
+        st.session_state.current_page = 'analysis'
+        # 重置搜尋頁面
+        if 'current_search_page' in st.session_state:
+            del st.session_state.current_search_page
 
-if st.button("查詢"):
-    lat, lng = geocode_address(address)
-    if not lat or not lng:
-        st.error("❌ 無法解析該地址")
-        st.stop()
+    # 頁面內容
+    if st.session_state.current_page == 'home':
+        st.title("🏠AI購屋分析")
+        st.write("👋歡迎來到房地產分析系統")
+        st.write("以下是使用說明：")
 
-    selected_dict = {sub: PLACE_TYPES[main_category][sub] for sub in sub_types}
-    places = query_osm_places(lat, lng, radius, selected_dict)
+        col1, col2 = st.columns(2)
 
-    if not places:
-        st.warning("⚠️ 這個範圍內沒有找到相關地點")
-        st.stop()
+        with col1:
+            # 左上表單
+            with st.form("search"):
+                st.subheader("🔍 搜尋頁面")
+                st.write("第一步：阿對對對 就是這樣 嗯嗯嗯 沒錯沒錯")
+                search_bt = st.form_submit_button("開始")
+                if search_bt:
+                    st.session_state.current_page = 'search'
 
-    # 排序 (由近到遠)
-    places = [(name, p_lat, p_lng, int(haversine(lat, lng, p_lat, p_lng)))
-              for name, p_lat, p_lng, _ in places]
-    places.sort(key=lambda x: x[3])
+            # 左下表單
+            with st.form("form2"):
+                st.subheader("表單 2")
+                submit2 = st.form_submit_button("提交")
+                if submit2:
+                    st.write("施工中...")
 
-    st.subheader("查詢結果（由近到遠）")
-    for name, p_lat, p_lng, dist in places:
-        st.write(f"**{name}** - {dist} 公尺")
+        with col2:
+            # 右上表單
+            with st.form("analysis"):
+                st.subheader("📊 分析頁面")
+                st.write("第二步：阿對對對 就是這樣 嗯嗯嗯 沒錯沒錯")
+                analysis_bt = st.form_submit_button("開始")
+                if analysis_bt:
+                    st.session_state.current_page = 'analysis'
 
-    # 在地圖上顯示
-    m = folium.Map(location=[lat, lng], zoom_start=16)
-    folium.Marker([lat, lng], tooltip="查詢中心", icon=folium.Icon(color="red")).add_to(m)
+            # 右下表單
+            with st.form("form4"):
+                st.subheader("表單 4")
+                submit4 = st.form_submit_button("提交")
+                if submit4:
+                    st.write("施工中...")
 
-    for name, p_lat, p_lng, dist in places:
-        folium.Marker(
-            [p_lat, p_lng],
-            tooltip=f"{name} ({dist} 公尺)",
-            icon=folium.Icon(color="blue")
-        ).add_to(m)
+    elif st.session_state.current_page == 'search':
+        st.title("🔍 搜尋頁面")
+        # -------- 搜尋頁面 --------
+        with st.form("property_requirements"):
+            st.subheader("📍 房產篩選條件")
+            
+            housetype = ["不限", "大樓", "華廈", "公寓", "套房", "透天", "店面", "辦公", "別墅", "倉庫", "廠房", "土地", "單售車位", "其它"]
+            options = get_city_options()
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                # 下拉選單
+                selected_label = st.selectbox("請選擇城市：", list(options.keys()))
+                housetype_change = st.selectbox("請選擇房產類別；", housetype, key="housetype")
+                         
+                
+            with col2:
+                # 選擇預算上限
+                budget_max = st.number_input(
+                    "💰預算上限(萬)",
+                    min_value=0,
+                    max_value=1000000,
+                    value=1000000,  # 預設值
+                    step=100      # 每次 + 或 - 的數值
+                )
+                
+                # 選擇預算下限
+                budget_min = st.number_input(
+                    "💰預算下限(萬)",
+                    min_value=0,
+                    max_value=1000000,
+                    value=0,  # 預設值
+                    step=100      # 每次 + 或 - 的數值
+                )
+                
+                # 驗證預算範圍
+                if budget_min > budget_max and budget_max > 0:
+                    st.error("⚠️ 預算下限不能大於上限！")
 
-    st_folium(m, width=700, height=500)
+            st.subheader("🎯房產要求細項")
+            col1, col2, col3 = st.columns([1, 1, 1])
+            with col1:
+                # 選擇屋齡範圍
+                age_max = st.number_input(
+                    "屋齡上限",
+                    min_value=0,
+                    max_value=100,
+                    value=100,  # 預設值
+                    step=1      # 每次 + 或 - 的數值
+                )
+                age_min = st.number_input(
+                    "屋齡下限",
+                    min_value=0,
+                    max_value=100,
+                    value=0,  # 預設值
+                    step=1      # 每次 + 或 - 的數值
+                )
+                
+                # 驗證屋齡範圍
+                if age_min > age_max:
+                    st.error("⚠️ 屋齡下限不能大於上限！")
+                    
+            with col2:
+                # 選擇建坪上限
+                area_max = st.number_input(
+                    "建坪上限",
+                    min_value=0,
+                    max_value=1000,
+                    value=1000,  # 預設值
+                    step=10      # 每次 + 或 - 的數值
+                )
+                area_min = st.number_input(
+                    "建坪下限",
+                    min_value=0,
+                    max_value=1000,
+                    value=0,  # 預設值
+                    step=10      # 每次 + 或 - 的數值
+                )
+                
+                # 驗證建坪範圍
+                if area_min > area_max:
+                    st.error("⚠️ 建坪下限不能大於上限！")
+                    
+            with col3:
+                car_grip = st.selectbox("🅿️車位選擇", ["不限", "需要","不要"], key="car_grip")
+            
+            st.subheader("🛠️特殊要求")
+            Special_Requests = st.text_area("請輸入您的需求", placeholder="輸入文字...")
+            # 提交按鈕
+            col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
+            with col3:
+                submit = st.form_submit_button("搜尋", use_container_width=True)
+            
+            # 只有按下按鈕才會執行
+        if submit:
+            # 驗證輸入
+            valid_input = True
+            if budget_min > budget_max and budget_max > 0:
+                st.error("❌ 請修正預算範圍設定")
+                valid_input = False
+            if age_min > age_max:
+                st.error("❌ 請修正屋齡範圍設定")
+                valid_input = False
+            if area_min > area_max:
+                st.error("❌ 請修正建坪範圍設定")
+                valid_input = False
+            
+            if valid_input:
+                # 重置搜尋頁面到第一頁
+                st.session_state.current_search_page = 1
+                selected_file = options[selected_label]
+                file_path = os.path.join("./Data", selected_file)
+                
+                try:
+                    # 讀取 CSV 檔案
+                    df = pd.read_csv(file_path)
+                    
+                    # 準備篩選條件
+                    filters = {
+                        'housetype': housetype_change,
+                        'budget_min': budget_min,
+                        'budget_max': budget_max,
+                        'age_min': age_min,
+                        'age_max': age_max,
+                        'area_min': area_min,
+                        'area_max': area_max,
+                        'car_grip': car_grip
+                    }
+                    
+                    # 執行篩選
+                    filtered_df = filter_properties(df, filters)
+                    
+                    # 儲存篩選後的資料到 session state
+                    st.session_state.filtered_df = filtered_df
+                    st.session_state.search_params = {
+                        'city': selected_label,
+                        'housetype': housetype_change,
+                        'budget_range': f"{budget_min}-{budget_max}萬" if budget_max < 1000000 else f"{budget_min}萬以上",
+                        'age_range': f"{age_min}-{age_max}年" if age_max < 100 else f"{age_min}年以上",
+                        'area_range': f"{area_min}-{area_max}坪" if area_max < 1000 else f"{area_min}坪以上",
+                        'car_grip': car_grip,
+                        'original_count': len(df),
+                        'filtered_count': len(filtered_df)
+                    }
+                    
+                    # 顯示篩選結果統計
+                    if len(filtered_df) == 0:
+                        st.warning("😅 沒有找到符合條件的房產，請調整篩選條件後重新搜尋")
+                    else:
+                        st.success(f"✅ 從 {len(df)} 筆資料中篩選出 {len(filtered_df)} 筆符合條件的房產")
+                    
+                except FileNotFoundError:
+                    st.error(f"❌ 找不到檔案: {file_path}")
+                except Exception as e:
+                    st.error(f"❌ 讀取 CSV 發生錯誤: {e}")
+
+        # 顯示搜尋結果和分頁
+        if 'filtered_df' in st.session_state and not st.session_state.filtered_df.empty:
+            df = st.session_state.filtered_df
+            search_params = st.session_state.search_params
+            
+            # 使用分頁功能
+            current_page_data, current_page, total_pages, total_items = display_pagination(df, items_per_page=10)
+            
+            # 顯示結果統計和篩選條件
+            st.subheader(f"🏠 {search_params['city']}房產列表")
+            
+            # 顯示當前頁面的資料
+            for idx, (index, row) in enumerate(current_page_data.iterrows()):
+                with st.container():
+                    # 計算全域索引
+                    global_idx = (current_page - 1) * 10 + idx + 1
+                    
+                    # 標題與指標
+                    col1, col2, col3, col4 = st.columns([7, 1, 1, 2])
+                    with col1:
+                        st.subheader(f"#{global_idx} 🏠 {row['標題']}")    
+                        st.write(f"**地址：** {row['地址']} | **屋齡：** {row['屋齡']} | **類型：** {row['類型']}")
+                        st.write(f"**建坪：** {row['建坪']} | **主+陽：** {row['主+陽']} | **格局：** {row['格局']} | **樓層：** {row['樓層']}")
+                        # 如果有車位資訊就顯示
+                        if '車位' in row and pd.notna(row['車位']):
+                            st.write(f"**車位：** {row['車位']}")
+                    with col4:
+                        st.metric("Price(NT$)", f"${int(row['總價(萬)'] * 10):,}K")
+                        # 計算單價（每坪）
+                        if pd.notna(row['建坪']) and row['建坪'] > 0:
+                            unit_price = (row['總價(萬)'] * 10000) / row['建坪']
+                            st.caption(f"單價: ${unit_price:,.0f}/坪")
+
+                    
+                    col1, col2, col3, col4, col5, col6, col7 = st.columns([1, 1, 1, 1, 1, 1, 1])
+                    with col7:
+                        property_url = f"https://www.sinyi.com.tw/buy/house/{row['編號']}?breadcrumb=list"
+                        st.markdown(
+                            f'<a href="{property_url}" target="_blank">'
+                            f'<button style="padding:5px 10px;">Property Link</button></a>',
+                            unsafe_allow_html=True
+                        )
+
+                    st.markdown("---")
+            
+            # 分頁控制按鈕
+            if total_pages > 1:
+                col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
+                
+                with col1:
+                    if st.button("⏮️ 第一頁", disabled=(current_page == 1)):
+                        st.session_state.current_search_page = 1
+                        st.rerun()
+                
+                with col2:
+                    if st.button("⏪ 上一頁", disabled=(current_page == 1)):
+                        st.session_state.current_search_page = max(1, current_page - 1)
+                        st.rerun()
+                
+                with col3:
+                    # 頁面跳轉選擇器
+                    new_page = st.selectbox(
+                        "",
+                        range(1, total_pages + 1),
+                        index=current_page - 1,
+                        key="page_selector"
+                    )
+                    if new_page != current_page:
+                        st.session_state.current_search_page = new_page
+                        st.rerun()
+                
+                with col4:
+                    if st.button("下一頁 ⏩", disabled=(current_page == total_pages)):
+                        st.session_state.current_search_page = min(total_pages, current_page + 1)
+                        st.rerun()
+                
+                with col5:
+                    if st.button("最後一頁 ⏭️", disabled=(current_page == total_pages)):
+                        st.session_state.current_search_page = total_pages
+                        st.rerun()
+                
+                # 顯示頁面資訊
+                st.info(f"📄 第 {current_page} 頁，共 {total_pages} 頁 | 顯示第 {(current_page-1)*10+1} - {min(current_page*10, total_items)} 筆資料")
+
+    elif st.session_state.current_page == 'analysis':
+        st.title("📊 分析頁面")
+        st.write("房產分析和數據")
+
+    st.sidebar.title("⚙️設置")
+
+    with st.sidebar.expander("🔑Gemini API KEY"):
+        api_key_input = st.text_input("請輸入 Gemini API 金鑰", type="password")
+        if st.button("確定", key="api_confirm_button"):
+            st.success("✅API KEY已設定")
+    with st.sidebar.expander("🗺️MAP API KEY"):
+        st.write("施工中...")
+    with st.sidebar.expander("🔄更新資料"):
+        st.write("施工中...")
+
+    if st.sidebar.button("其他功能一", use_container_width=True, key="updata_button"):
+        st.sidebar.write("施工中...")
+
+    if st.sidebar.button("💬智能小幫手", use_container_width=True, key="line_button"):
+        st.sidebar.write("施工中...")
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+

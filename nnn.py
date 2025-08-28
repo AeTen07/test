@@ -1,10 +1,10 @@
 import streamlit as st
 import requests
-import math
 import folium
 from streamlit_folium import st_folium
 
-st.title("地址周邊 600 公尺查詢（OpenStreetMap 版）")
+st.set_page_config(page_title="周邊地點查詢", layout="wide")
+st.title("📍 地址周邊 600 公尺查詢（OpenStreetMap 版）")
 
 address = st.text_input("輸入地址")
 radius = 600  # 公尺
@@ -35,13 +35,15 @@ PLACE_TAGS = {
     },
 }
 
-main_category = st.selectbox("選擇分類", PLACE_TAGS.keys())
+main_category = st.selectbox("選擇分類", list(PLACE_TAGS.keys()))
 sub_types = st.multiselect("選擇要查詢的地點類型", list(PLACE_TAGS[main_category].keys()))
+
 
 # ------------------------------
 # 工具函式
 # ------------------------------
 def geocode_nominatim(addr: str):
+    """利用 Nominatim 將地址轉換為經緯度"""
     url = "https://nominatim.openstreetmap.org/search"
     params = {"q": addr, "format": "json", "limit": 1}
     r = requests.get(url, params=params, headers={"User-Agent": "streamlit-app"})
@@ -52,6 +54,7 @@ def geocode_nominatim(addr: str):
 
 
 def query_overpass(lat, lon, radius, tags):
+    """透過 Overpass API 查詢地點"""
     query_parts = []
     for k, v in tags.items():
         query_parts.append(
@@ -69,6 +72,9 @@ def query_overpass(lat, lon, radius, tags):
     out center;
     """
     r = requests.post("https://overpass-api.de/api/interpreter", data=query.encode("utf-8"))
+    if r.status_code != 200:
+        return []
+
     data = r.json()
     places = []
     for el in data.get("elements", []):
@@ -85,7 +91,7 @@ def query_overpass(lat, lon, radius, tags):
 # ------------------------------
 # 查詢流程
 # ------------------------------
-if st.button("查詢"):
+if st.button("🔍 查詢"):
     if not address:
         st.error("請輸入地址")
         st.stop()
@@ -107,7 +113,7 @@ if st.button("查詢"):
         for t, name, _, _ in all_places:
             st.write(f"**{t}** - {name}")
     else:
-        st.write("該範圍內沒有找到地點。")
+        st.warning("⚠️ 該範圍內沒有找到地點。")
 
     # 顯示地圖
     fmap = folium.Map(location=[lat, lon], zoom_start=16)

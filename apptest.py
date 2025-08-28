@@ -3,17 +3,25 @@ import requests
 import google.generativeai as genai
 
 # ===============================
-# OSM & Gemini 設定
+# 取得 API Key（從 st.session_state 共用）
 # ===============================
-OPENCAGE_KEY = st.secrets.get("OPENCAGE_API_KEY")
-GEMINI_KEY = st.secrets.get("GEMINI_API_KEY")
+'''
+OPENCAGE_KEY = st.session_state.get("OPENCAGE_KEY")
+GEMINI_KEY = st.session_state.get("GEMINI_KEY")'''
+
+OPENCAGE_KEY ="5b18aaad29f64c6892a3ea7e5168eeb2"
+GEMINI_KEY = "AIzaSyDXPWYkMfNtasScp6A4_9i5a9QwZ3vLW2Q"
 
 if not OPENCAGE_KEY or not GEMINI_KEY:
-    st.error("❌ 請先設定環境變數 OPENCAGE_API_KEY 與 GEMINI_API_KEY")
-    st.stop()
+    st.warning("請先在側邊欄設定 OPENCAGE 與 GEMINI API Key")
+    
 
+# 設定 Gemini API
 genai.configure(api_key=GEMINI_KEY)
 
+# ===============================
+# 支援查詢的 OSM Tags
+# ===============================
 OSM_TAGS = {
     "交通": {"public_transport": "stop_position"},
     "超商": {"shop": "convenience"},
@@ -27,17 +35,20 @@ OSM_TAGS = {
 # 工具函式
 # ===============================
 def geocode_address(address: str):
+    """利用 OpenCage 把地址轉成經緯度"""
     url = "https://api.opencagedata.com/geocode/v1/json"
     params = {"q": address, "key": OPENCAGE_KEY, "language": "zh-TW", "limit": 1}
     try:
         res = requests.get(url, params=params, timeout=10).json()
         if res["results"]:
             return res["results"][0]["geometry"]["lat"], res["results"][0]["geometry"]["lng"]
-        return None, None
-    except:
+        else:
+            return None, None
+    except Exception:
         return None, None
 
 def query_osm(lat, lng, radius=200):
+    """合併查詢 OSM，一次拿回所有資料"""
     query_parts = []
     for tag_dict in OSM_TAGS.values():
         for k, v in tag_dict.items():
@@ -46,12 +57,19 @@ def query_osm(lat, lng, radius=200):
               way["{k}"="{v}"](around:{radius},{lat},{lng});
               relation["{k}"="{v}"](around:{radius},{lat},{lng});
             """)
-    query = f"[out:json][timeout:25];({''.join(query_parts)});out center;"
+    query = f"""
+    [out:json][timeout:25];
+    (
+        {"".join(query_parts)}
+    );
+    out center;
+    """
     try:
         r = requests.post("https://overpass-api.de/api/interpreter", data=query.encode("utf-8"), timeout=20)
         data = r.json()
     except:
         return {}
+
     results = {k: [] for k in OSM_TAGS.keys()}
     for el in data.get("elements", []):
         tags = el.get("tags", {})
@@ -63,21 +81,27 @@ def query_osm(lat, lng, radius=200):
     return results
 
 def format_info(address, info_dict):
+    """整理統計數字給 Gemini"""
     lines = [f"房屋（{address}）："]
     for k, v in info_dict.items():
         lines.append(f"- {k}: {len(v)} 個")
     return "\n".join(lines)
 
 # ===============================
-# 渲染頁面函式
+# compare_page UI
 # ===============================
 def render_compare_page():
-    st.title("🏠 房屋比較助手 + 💬 對話框")
+    st.title("🏡 房屋比較 + 💬 對話助手")
 
     # 初始化狀態
-    for key in ["comparison_done", "chat_history", "text_a", "text_b"]:
-        if key not in st.session_state:
-            st.session_state[key] = [] if "history" in key else ""
+    if "comparison_done" not in st.session_state:
+        st.session_state["comparison_done"] = False
+    if "chat_history" not in st.session_state:
+        st.session_state["chat_history"] = []
+    if "text_a" not in st.session_state:
+        st.session_state["text_a"] = ""
+    if "text_b" not in st.session_state:
+        st.session_state["text_b"] = ""
 
     col1, col2 = st.columns(2)
     with col1:
@@ -96,8 +120,8 @@ def render_compare_page():
             st.error("❌ 無法解析其中一個地址")
             st.stop()
 
-        info_a = query_osm(lat_a, lng_a)
-        info_b = query_osm(lat_b, lng_b)
+        info_a = query_osm(lat_a, lng_a, radius=200)
+        info_b = query_osm(lat_b, lng_b, radius=200)
 
         text_a = format_info(addr_a, info_a)
         text_b = format_info(addr_b, info_b)
@@ -115,22 +139,19 @@ def render_compare_page():
         """
         model = genai.GenerativeModel("gemini-2.0-flash")
         response = model.generate_content(prompt)
+
         st.subheader("📊 Gemini 分析結果")
         st.write(response.text)
         st.session_state["comparison_done"] = True
 
-    # 側邊欄對照表
-    with st.sidebar:
-        if st.session_state["comparison_done"]:
-            st.subheader("🏠 房屋資訊對照表")
-            st.markdown(f"### 房屋 A\n{st.session_state['text_a']}")
-            st.markdown(f"### 房屋 B\n{st.session_state['text_b']}")
-        else:
-            st.info("⚠️ 請先輸入房屋地址並比較")
-
-    # 簡單對話框
+    # 顯示房屋資訊
     if st.session_state["comparison_done"]:
-        st.header("💬 簡單對話框")
+        st.subheader("🏠 房屋資訊對照表")
+        st.markdown(f"### 房屋 A\n{st.session_state['text_a']}")
+        st.markdown(f"### 房屋 B\n{st.session_state['text_b']}")
+
+        # 簡單對話框
+        st.header("💬 對話框")
         with st.form("chat_form", clear_on_submit=True):
             user_input = st.text_input("你想問什麼？", placeholder="請輸入問題...")
             submitted = st.form_submit_button("🚀 送出")

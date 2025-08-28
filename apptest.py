@@ -11,13 +11,12 @@ GEMINI_KEY = st.session_state.get("GEMINI_KEY")'''
 
 OPENCAGE_KEY ="5b18aaad29f64c6892a3ea7e5168eeb2"
 GEMINI_KEY = "AIzaSyDXPWYkMfNtasScp6A4_9i5a9QwZ3vLW2Q"
-
+# 如果沒設定，僅提示，不報錯 / 停止
 if not OPENCAGE_KEY or not GEMINI_KEY:
-    st.warning("請先在側邊欄設定 OPENCAGE 與 GEMINI API Key")
-    
-
-# 設定 Gemini API
-genai.configure(api_key=GEMINI_KEY)
+    st.warning("⚠️ 請先在側邊欄設定 OPENCAGE 與 GEMINI API Key，否則無法進行比較。")
+else:
+    # 設定 Gemini API
+    genai.configure(api_key=GEMINI_KEY)
 
 # ===============================
 # 支援查詢的 OSM Tags
@@ -36,11 +35,13 @@ OSM_TAGS = {
 # ===============================
 def geocode_address(address: str):
     """利用 OpenCage 把地址轉成經緯度"""
+    if not OPENCAGE_KEY:
+        return None, None
     url = "https://api.opencagedata.com/geocode/v1/json"
     params = {"q": address, "key": OPENCAGE_KEY, "language": "zh-TW", "limit": 1}
     try:
         res = requests.get(url, params=params, timeout=10).json()
-        if res["results"]:
+        if res.get("results"):
             return res["results"][0]["geometry"]["lat"], res["results"][0]["geometry"]["lng"]
         else:
             return None, None
@@ -93,6 +94,10 @@ def format_info(address, info_dict):
 def render_compare_page():
     st.title("🏡 房屋比較 + 💬 對話助手")
 
+    if not OPENCAGE_KEY or not GEMINI_KEY:
+        st.info("請先在左側輸入 API Key 以啟用功能。")
+        return  # 直接 return，避免後續錯誤
+
     # 初始化狀態
     if "comparison_done" not in st.session_state:
         st.session_state["comparison_done"] = False
@@ -112,13 +117,13 @@ def render_compare_page():
     if st.button("比較房屋"):
         if not addr_a or not addr_b:
             st.warning("請輸入兩個地址")
-            st.stop()
+            return
 
         lat_a, lng_a = geocode_address(addr_a)
         lat_b, lng_b = geocode_address(addr_b)
         if not lat_a or not lat_b:
             st.error("❌ 無法解析其中一個地址")
-            st.stop()
+            return
 
         info_a = query_osm(lat_a, lng_a, radius=200)
         info_b = query_osm(lat_b, lng_b, radius=200)

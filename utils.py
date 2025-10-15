@@ -1,3 +1,5 @@
+# utils.py (更新版)
+
 import os
 import pandas as pd
 import math
@@ -14,11 +16,66 @@ def get_city_options(data_dir="./Data"):
     options = {name_map[f]: f for f in files if f in name_map}
     return dict(sorted(options.items(), key=lambda x: x[0]))
 
-def filter_properties(df, filters):
-    filtered_df = df.copy()
+def parse_layout(layout_str):
+    """解析格局欄位 -> rooms, living_rooms, bathrooms"""
+    import re
+    if not isinstance(layout_str, str):
+        return {"rooms": None, "living_rooms": None, "bathrooms": None}
+    m = re.match(r'(\d+)房(\d+)廳(\d+)衛', layout_str)
+    if m:
+        return {"rooms": int(m.group(1)), "living_rooms": int(m.group(2)), "bathrooms": int(m.group(3))}
+    nums = re.findall(r'(\d+)', layout_str)
+    return {
+        "rooms": int(nums[0]) if len(nums) > 0 else None,
+        "living_rooms": int(nums[1]) if len(nums) > 1 else None,
+        "bathrooms": int(nums[2]) if len(nums) > 2 else None
+    }
 
+def parse_floor(floor_str):
+    """解析樓層欄位 -> floor min/max"""
+    import re
+    if not isinstance(floor_str, str):
+        return {"min": None, "max": None}
+    nums = re.findall(r'(\d+)', floor_str)
+    return {"min": int(nums[0]) if len(nums) > 0 else None,
+            "max": int(nums[1]) if len(nums) > 1 else None}
+
+def normalize_special_value(val):
+    """解析 Gemini 特殊要求成 min/max 或數字"""
+    import re
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        return int(val)
+    s = str(val).strip()
+    # 區間
+    m = re.match(r'^(\d+)\s*[-~–]\s*(\d+)$', s)
+    if m:
+        return {"min": int(m.group(1)), "max": int(m.group(2))}
+    # 以上
+    m = re.search(r'(\d+)\s*(以上|\+|>=)', s)
+    if m:
+        return {"min": int(m.group(1))}
+    # 以下
+    m = re.search(r'(以下|<=)\s*(\d+)', s)
+    if m:
+        return {"max": int(m.group(2))}
+    # 文字抽數字
+    m = re.search(r'(\d+)', s)
+    if m:
+        return int(m.group(1))
+    # 標籤
+    if '低' in s:
+        return {"min": 1, "max": 5}
+    if '高' in s:
+        return {"min": 6}
+    return None
+
+def filter_properties(df, filters):
+    """篩選房產 DataFrame"""
+    filtered_df = df.copy()
     try:
-        # 類型篩選
+        # 類型
         if filters.get('housetype') and filters['housetype'] != "不限":
             if '類型' in filtered_df.columns:
                 filtered_df = filtered_df[
@@ -56,7 +113,7 @@ def filter_properties(df, filters):
                     (filtered_df['車位'] == "無") |
                     (filtered_df['車位'] == 0)
                 ]
-        # Gemini 特殊要求
+        # 格局與樓層
         for col in ['rooms', 'living_rooms', 'bathrooms', 'floor']:
             if col in filters and col in filtered_df.columns:
                 val = filters[col]
@@ -71,7 +128,6 @@ def filter_properties(df, filters):
     except Exception as e:
         st.error(f"篩選過程中發生錯誤: {e}")
         return df
-
     return filtered_df
 
 def display_pagination(df, items_per_page=10):
@@ -85,34 +141,3 @@ def display_pagination(df, items_per_page=10):
     end_idx = min(start_idx + items_per_page, total_items)
     current_page_data = df.iloc[start_idx:end_idx]
     return current_page_data, st.session_state.current_search_page, total_pages, total_items
-
-def normalize_special_value(val):
-    """解析 Gemini 特殊要求成 min/max 或數字"""
-    import re
-    if val is None:
-        return None
-    if isinstance(val, (int, float)):
-        return int(val)
-    s = str(val).strip()
-    # 區間
-    m = re.match(r'^(\d+)\s*[-~–]\s*(\d+)$', s)
-    if m:
-        return {"min": int(m.group(1)), "max": int(m.group(2))}
-    # 以上
-    m = re.search(r'(\d+)\s*(以上|\+|>=)', s)
-    if m:
-        return {"min": int(m.group(1))}
-    # 以下
-    m = re.search(r'(以下|<=)\s*(\d+)', s)
-    if m:
-        return {"max": int(m.group(2))}
-    # 文字抽數字
-    m = re.search(r'(\d+)', s)
-    if m:
-        return int(m.group(1))
-    # 標籤
-    if '低' in s:
-        return {"min": 1, "max": 5}
-    if '高' in s:
-        return {"min": 6}
-    return None

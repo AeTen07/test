@@ -1,152 +1,140 @@
-# utils.py (更新版)
-
 import os
 import pandas as pd
 import math
 import streamlit as st
 
+import os
+
 def get_city_options(data_dir="./Data"):
+    """
+    獲取城市選項，只顯示對照表內有定義的檔案
+    """
     if not os.path.exists(data_dir):
         return {}
+
+    # 對照表：英文檔名 -> 中文名稱
     name_map = {
         "Taichung-city_buy_properties.csv": "台中市",
         "Taipei-city_buy_properties.csv": "台北市"
+        
+
+        # 可以繼續加其他城市
     }
+
+    # 讀取資料夾中的檔案
     files = [f for f in os.listdir(data_dir) if f.endswith(".csv")]
+
+    # 只挑出有對照表的檔案
     options = {name_map[f]: f for f in files if f in name_map}
-    return dict(sorted(options.items(), key=lambda x: x[0]))
 
-def parse_layout(layout_str):
-    """解析格局欄位 -> rooms, living_rooms, bathrooms"""
-    import re
-    if not isinstance(layout_str, str):
-        return {"rooms": None, "living_rooms": None, "bathrooms": None}
-    m = re.match(r'(\d+)房(\d+)廳(\d+)衛', layout_str)
-    if m:
-        return {"rooms": int(m.group(1)), "living_rooms": int(m.group(2)), "bathrooms": int(m.group(3))}
-    nums = re.findall(r'(\d+)', layout_str)
-    return {
-        "rooms": int(nums[0]) if len(nums) > 0 else None,
-        "living_rooms": int(nums[1]) if len(nums) > 1 else None,
-        "bathrooms": int(nums[2]) if len(nums) > 2 else None
-    }
+    # 排序（照中文名稱）
+    options = dict(sorted(options.items(), key=lambda x: x[0]))
 
-def parse_floor(floor_str):
-    """解析樓層欄位 -> floor min/max"""
-    import re
-    if not isinstance(floor_str, str):
-        return {"min": None, "max": None}
-    nums = re.findall(r'(\d+)', floor_str)
-    return {"min": int(nums[0]) if len(nums) > 0 else None,
-            "max": int(nums[1]) if len(nums) > 1 else None}
+    return options
 
-def normalize_special_value(val):
-    """解析 Gemini 特殊要求成 min/max 或數字"""
-    import re
-    if val is None:
-        return None
-    if isinstance(val, (int, float)):
-        return int(val)
-    s = str(val).strip()
-    # 區間
-    m = re.match(r'^(\d+)\s*[-~–]\s*(\d+)$', s)
-    if m:
-        return {"min": int(m.group(1)), "max": int(m.group(2))}
-    # 以上
-    m = re.search(r'(\d+)\s*(以上|\+|>=)', s)
-    if m:
-        return {"min": int(m.group(1))}
-    # 以下
-    m = re.search(r'(以下|<=)\s*(\d+)', s)
-    if m:
-        return {"max": int(m.group(2))}
-    # 文字抽數字
-    m = re.search(r'(\d+)', s)
-    if m:
-        return int(m.group(1))
-    # 標籤
-    if '低' in s:
-        return {"min": 1, "max": 5}
-    if '高' in s:
-        return {"min": 6}
-    return None
 
 def filter_properties(df, filters):
+    """
+    根據篩選條件過濾房產資料（支援模糊搜尋類型）
+    """
     filtered_df = df.copy()
-
+    
     try:
-        # 1️⃣ 類型篩選
-        if filters.get('housetype') and filters['housetype'] != "不限":
+        # 🔑 房產類型篩選（模糊搜尋）
+        if filters['housetype'] != "不限":
             if '類型' in filtered_df.columns:
                 filtered_df = filtered_df[
                     filtered_df['類型'].astype(str).str.contains(filters['housetype'], case=False, na=False)
                 ]
-
-        # 2️⃣ 總價篩選
-        if '總價(萬)' in filtered_df.columns:
-            filtered_df['總價(萬)'] = pd.to_numeric(filtered_df['總價(萬)'], errors='coerce')
-            filtered_df = filtered_df[
-                (filtered_df['總價(萬)'].fillna(0) >= filters.get('budget_min', 0)) &
-                (filtered_df['總價(萬)'].fillna(0) <= filters.get('budget_max', 1e9))
-            ]
-
-        # 3️⃣ 屋齡篩選
-        if '屋齡' in filtered_df.columns:
-            filtered_df['屋齡'] = pd.to_numeric(filtered_df['屋齡'], errors='coerce')
-            filtered_df = filtered_df[
-                (filtered_df['屋齡'].fillna(0) >= filters.get('age_min', 0)) &
-                (filtered_df['屋齡'].fillna(0) <= filters.get('age_max', 1e9))
-            ]
-
-        # 4️⃣ 建坪篩選
-        if '建坪' in filtered_df.columns:
-            filtered_df['建坪'] = pd.to_numeric(filtered_df['建坪'], errors='coerce')
-            filtered_df = filtered_df[
-                (filtered_df['建坪'].fillna(0) >= filters.get('area_min', 0)) &
-                (filtered_df['建坪'].fillna(0) <= filters.get('area_max', 1e9))
-            ]
-
-        # 5️⃣ 車位篩選
-        if 'car_grip' in filters and '車位' in filtered_df.columns:
-            filtered_df['車位'] = filtered_df['車位'].fillna("無")
-            if filters['car_grip'] == "需要":
+        
+        # 預算篩選（總價萬元）
+        if filters['budget_min'] > 0:
+            filtered_df = filtered_df[filtered_df['總價(萬)'] >= filters['budget_min']]
+        if filters['budget_max'] < 1000000:
+            filtered_df = filtered_df[filtered_df['總價(萬)'] <= filters['budget_max']]
+        
+        # 屋齡篩選
+        if filters['age_min'] > 0:
+            filtered_df = filtered_df[filtered_df['屋齡'] >= filters['age_min']]
+        if filters['age_max'] < 100:
+            filtered_df = filtered_df[filtered_df['屋齡'] <= filters['age_max']]
+        
+        # 建坪篩選
+        if filters['area_min'] > 0:
+            filtered_df = filtered_df[filtered_df['建坪'] >= filters['area_min']]
+        if filters['area_max'] < 1000:
+            filtered_df = filtered_df[filtered_df['建坪'] <= filters['area_max']]
+        
+        # 車位篩選
+        if filters['car_grip'] == "需要":
+            if '車位' in filtered_df.columns:
                 filtered_df = filtered_df[
-                    (filtered_df['車位'] != "無") & (filtered_df['車位'] != 0)
+                    (filtered_df['車位'].notna()) & 
+                    (filtered_df['車位'] != "無") & 
+                    (filtered_df['車位'] != 0)
                 ]
-            elif filters['car_grip'] == "不要":
+        elif filters['car_grip'] == "不要":
+            if '車位' in filtered_df.columns:
                 filtered_df = filtered_df[
-                    (filtered_df['車位'] == "無") | (filtered_df['車位'] == 0)
+                    (filtered_df['車位'].isna()) | 
+                    (filtered_df['車位'] == "無") | 
+                    (filtered_df['車位'] == 0)
                 ]
-
-        # 6️⃣ Gemini 特殊要求欄位（rooms, living_rooms, bathrooms, floor）
-        for col in ['rooms', 'living_rooms', 'bathrooms', 'floor']:
-            if col in filters and col in filtered_df.columns:
-                val = filters[col]
-                if isinstance(val, dict):
-                    if 'min' in val:
-                        filtered_df[col] = pd.to_numeric(filtered_df[col], errors='coerce')
-                        filtered_df = filtered_df[filtered_df[col].fillna(0) >= val['min']]
-                    if 'max' in val:
-                        filtered_df[col] = pd.to_numeric(filtered_df[col], errors='coerce')
-                        filtered_df = filtered_df[filtered_df[col].fillna(0) <= val['max']]
-                elif isinstance(val, (int, float)):
-                    filtered_df[col] = pd.to_numeric(filtered_df[col], errors='coerce')
-                    filtered_df = filtered_df[filtered_df[col].fillna(0) >= val]
-
+        
     except Exception as e:
         st.error(f"篩選過程中發生錯誤: {e}")
         return df
-
+    
     return filtered_df
 
 def display_pagination(df, items_per_page=10):
+    """
+    處理分頁邏輯並返回當前頁面的資料
+    """
+    # 初始化頁面狀態
     if 'current_search_page' not in st.session_state:
         st.session_state.current_search_page = 1
+    
     total_items = len(df)
-    total_pages = max(1, math.ceil(total_items / items_per_page))
+    total_pages = math.ceil(total_items / items_per_page) if total_items > 0 else 1
+    
+    # 確保頁面數在有效範圍內
     if st.session_state.current_search_page > total_pages:
         st.session_state.current_search_page = 1
+    
+    # 計算當前頁面的資料範圍
     start_idx = (st.session_state.current_search_page - 1) * items_per_page
     end_idx = min(start_idx + items_per_page, total_items)
+    
     current_page_data = df.iloc[start_idx:end_idx]
+    
     return current_page_data, st.session_state.current_search_page, total_pages, total_items
+
+def filter_properties(df, filters):
+    # 既有篩選條件（預算、建坪、屋齡、車位、房型）
+    # ...
+
+    # Gemini AI 特殊要求
+    if "rooms" in filters:
+        rooms = filters["rooms"]
+        if isinstance(rooms, dict):  # 區間
+            df = df[(df['房間數'] >= rooms.get("min", 0)) & (df['房間數'] <= rooms.get("max", 100))]
+        else:
+            df = df[df['房間數'] >= rooms]  # 以上
+    if "living_rooms" in filters:
+        living = filters["living_rooms"]
+        df = df[df['廳數'] >= living]
+    if "bathrooms" in filters:
+        bath = filters["bathrooms"]
+        df = df[df['衛數'] >= bath]
+    if "floor" in filters:
+        floor = filters["floor"]
+        if isinstance(floor, dict):
+            if "min" in floor:
+                df = df[df['樓層'] >= floor["min"]]
+            if "max" in floor:
+                df = df[df['樓層'] <= floor["max"]]
+        else:
+            df = df[df['樓層'] == floor]
+
+    return df

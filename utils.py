@@ -72,62 +72,71 @@ def normalize_special_value(val):
     return None
 
 def filter_properties(df, filters):
-    """篩選房產 DataFrame"""
     filtered_df = df.copy()
+
     try:
-        # 類型
+        # 1️⃣ 類型篩選
         if filters.get('housetype') and filters['housetype'] != "不限":
             if '類型' in filtered_df.columns:
                 filtered_df = filtered_df[
                     filtered_df['類型'].astype(str).str.contains(filters['housetype'], case=False, na=False)
                 ]
-        # 總價
+
+        # 2️⃣ 總價篩選
         if '總價(萬)' in filtered_df.columns:
+            filtered_df['總價(萬)'] = pd.to_numeric(filtered_df['總價(萬)'], errors='coerce')
             filtered_df = filtered_df[
-                (filtered_df['總價(萬)'] >= filters.get('budget_min', 0)) &
-                (filtered_df['總價(萬)'] <= filters.get('budget_max', 1e9))
+                (filtered_df['總價(萬)'].fillna(0) >= filters.get('budget_min', 0)) &
+                (filtered_df['總價(萬)'].fillna(0) <= filters.get('budget_max', 1e9))
             ]
-        # 屋齡
+
+        # 3️⃣ 屋齡篩選
         if '屋齡' in filtered_df.columns:
+            filtered_df['屋齡'] = pd.to_numeric(filtered_df['屋齡'], errors='coerce')
             filtered_df = filtered_df[
-                (filtered_df['屋齡'] >= filters.get('age_min', 0)) &
-                (filtered_df['屋齡'] <= filters.get('age_max', 1e9))
+                (filtered_df['屋齡'].fillna(0) >= filters.get('age_min', 0)) &
+                (filtered_df['屋齡'].fillna(0) <= filters.get('age_max', 1e9))
             ]
-        # 建坪
+
+        # 4️⃣ 建坪篩選
         if '建坪' in filtered_df.columns:
+            filtered_df['建坪'] = pd.to_numeric(filtered_df['建坪'], errors='coerce')
             filtered_df = filtered_df[
-                (filtered_df['建坪'] >= filters.get('area_min', 0)) &
-                (filtered_df['建坪'] <= filters.get('area_max', 1e9))
+                (filtered_df['建坪'].fillna(0) >= filters.get('area_min', 0)) &
+                (filtered_df['建坪'].fillna(0) <= filters.get('area_max', 1e9))
             ]
-        # 車位
+
+        # 5️⃣ 車位篩選
         if 'car_grip' in filters and '車位' in filtered_df.columns:
+            filtered_df['車位'] = filtered_df['車位'].fillna("無")
             if filters['car_grip'] == "需要":
                 filtered_df = filtered_df[
-                    (filtered_df['車位'].notna()) &
-                    (filtered_df['車位'] != "無") &
-                    (filtered_df['車位'] != 0)
+                    (filtered_df['車位'] != "無") & (filtered_df['車位'] != 0)
                 ]
             elif filters['car_grip'] == "不要":
                 filtered_df = filtered_df[
-                    (filtered_df['車位'].isna()) |
-                    (filtered_df['車位'] == "無") |
-                    (filtered_df['車位'] == 0)
+                    (filtered_df['車位'] == "無") | (filtered_df['車位'] == 0)
                 ]
-        # 格局與樓層
+
+        # 6️⃣ Gemini 特殊要求欄位（rooms, living_rooms, bathrooms, floor）
         for col in ['rooms', 'living_rooms', 'bathrooms', 'floor']:
             if col in filters and col in filtered_df.columns:
                 val = filters[col]
                 if isinstance(val, dict):
                     if 'min' in val:
-                        filtered_df = filtered_df[filtered_df[col] >= val['min']]
+                        filtered_df[col] = pd.to_numeric(filtered_df[col], errors='coerce')
+                        filtered_df = filtered_df[filtered_df[col].fillna(0) >= val['min']]
                     if 'max' in val:
-                        filtered_df = filtered_df[filtered_df[col] <= val['max']]
-                else:
-                    filtered_df = filtered_df[filtered_df[col] >= val]
+                        filtered_df[col] = pd.to_numeric(filtered_df[col], errors='coerce')
+                        filtered_df = filtered_df[filtered_df[col].fillna(0) <= val['max']]
+                elif isinstance(val, (int, float)):
+                    filtered_df[col] = pd.to_numeric(filtered_df[col], errors='coerce')
+                    filtered_df = filtered_df[filtered_df[col].fillna(0) >= val]
 
     except Exception as e:
         st.error(f"篩選過程中發生錯誤: {e}")
         return df
+
     return filtered_df
 
 def display_pagination(df, items_per_page=10):
